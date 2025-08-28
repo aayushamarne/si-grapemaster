@@ -277,12 +277,26 @@ class AppStrings {
   };
 
   String t(String key) {
-    // First try API/cache, then fallback to hardcoded data
-    final apiResult = TranslationController.instance.translate(code: code, key: key);
-    if (apiResult != key) return apiResult;
-    
-    // Fallback to hardcoded translations
-    return _fallbackData[code]?[key] ?? _fallbackData['en']?[key] ?? key;
+    // Translate the English phrase, not the key
+    final englishText = _fallbackData['en']?[key] ?? key;
+    final apiResult = TranslationController.instance.translate(code: code, key: englishText);
+    if (apiResult != englishText) return apiResult;
+
+    // Fallback to hardcoded translations by key → localized string
+    return _fallbackData[code]?[key] ?? _fallbackData['en']?[key] ?? englishText;
+  }
+
+  // Builds a dynamic label like "Today, 28 Aug" in the selected language
+  String todayLabel() {
+    final now = DateTime.now();
+    final months = <String, List<String>>{
+      'en': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+      'hi': ['जन', 'फ़र', 'मार्च', 'अप्रै', 'मई', 'जून', 'जुला', 'अग', 'सितं', 'अक्टू', 'नव', 'दिसं'],
+      'mr': ['जान', 'फेब', 'मार्च', 'एप्र', 'मे', 'जून', 'जुल', 'ऑग', 'सप्ट', 'ऑक्ट', 'नोव्ह', 'डिसं'],
+    };
+    final month = (months[code] ?? months['en'])![now.month - 1];
+    final todayWord = switch (code) { 'hi' => 'आज', 'mr' => 'आज', _ => 'Today' };
+    return '$todayWord, ${now.day} $month';
   }
 }
 
@@ -292,11 +306,16 @@ class TranslationController extends ChangeNotifier {
   static final TranslationController instance = TranslationController._();
   TranslationController._();
 
-  // LibreTranslate is free and open-source - no API key required
-  static const String _endpoint = 'https://libretranslate.de/translate';
+  // LibreTranslate mirrors (no API key). We'll try these in order.
+  static const List<String> _libreEndpoints = [
+    'https://libretranslate.de/translate',
+    'https://translate.mentality.rip/translate',
+    'https://libretranslate.com/translate',
+  ];
 
   final Map<String, Map<String, String>> _memoryCache = {};
   final Set<String> _loadingKeys = {};
+  final Set<String> _failedKeys = {}; // avoid retry storms when offline
 
   Future<void> ensureLoaded(String code) async {
     // Load cached translations from disk
@@ -374,7 +393,7 @@ class TranslationController extends ChangeNotifier {
 
     for (final text in commonStrings) {
       final cacheKey = '${code}_$text';
-      if (!_loadingKeys.contains(cacheKey)) {
+      if (!_loadingKeys.contains(cacheKey) && !_failedRecently(cacheKey)) {
         _loadingKeys.add(cacheKey);
         _translateAndCache(code: code, key: text);
       }
@@ -405,41 +424,83 @@ class TranslationController extends ChangeNotifier {
 
   Future<void> _translateAndCache({required String code, required String key}) async {
     try {
-      final uri = Uri.parse(_endpoint);
-      final resp = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'q': key,
-          'source': 'en',
-          'target': code,
-          'format': 'text',
-        }),
-      ).timeout(const Duration(seconds: 15));
+      String? translatedText;
 
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        final translatedText = data['translatedText']?.toString();
-        if (translatedText != null && translatedText.isNotEmpty && translatedText != key) {
-          // Cache the result
-          final map = _memoryCache.putIfAbsent(code, () => {});
-          map[key] = translatedText;
-          
-          // Save to disk
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('translations_$code', jsonEncode(map));
-          
-          print('Translated: "$key" -> "$translatedText" (${code})'); // Debug log
-          notifyListeners();
-        }
+      // 1) Try LibreTranslate mirrors
+      translatedText = await _translateViaLibreMirrors(key: key, targetCode: code);
+
+      // 2) Fallback to MyMemory (free, no key)
+      translatedText ??= await _translateViaMyMemory(key: key, targetCode: code);
+
+      if (translatedText != null && translatedText.isNotEmpty && translatedText != key) {
+        final map = _memoryCache.putIfAbsent(code, () => {});
+        map[key] = translatedText;
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('translations_$code', jsonEncode(map));
+
+        notifyListeners();
       } else {
-        print('Translation failed for "$key" to ${code}: ${resp.statusCode}'); // Debug log
+        _markFailed('${code}_$key');
       }
     } catch (e) {
-      print('Translation error for "$key" to ${code}: $e'); // Debug log
+      _markFailed('${code}_$key');
     } finally {
       _loadingKeys.remove('${code}_$key');
     }
+  }
+
+  Future<String?> _translateViaLibreMirrors({required String key, required String targetCode}) async {
+    for (final base in _libreEndpoints) {
+      try {
+        final uri = Uri.parse(base);
+        final resp = await http
+            .post(
+              uri,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'q': key,
+                'source': 'en',
+                'target': targetCode,
+                'format': 'text',
+              }),
+            )
+            .timeout(const Duration(seconds: 10));
+        if (resp.statusCode == 200) {
+          final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          final text = data['translatedText']?.toString();
+          if (text != null && text.isNotEmpty) return text;
+        }
+      } catch (_) {
+        // try next mirror
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _translateViaMyMemory({required String key, required String targetCode}) async {
+    try {
+      final uri = Uri.parse('https://api.mymemory.translated.net/get?q=' + Uri.encodeQueryComponent(key) + '&langpair=en|' + Uri.encodeQueryComponent(targetCode));
+      final resp = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final responseData = data['responseData'] as Map<String, dynamic>?;
+        final text = responseData?['translatedText']?.toString();
+        if (text != null && text.isNotEmpty) return text;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // simple failure memory to avoid repeated retries when offline
+  final Map<String, DateTime> _recentFailures = {};
+  void _markFailed(String cacheKey) {
+    _recentFailures[cacheKey] = DateTime.now();
+  }
+  bool _failedRecently(String cacheKey) {
+    final ts = _recentFailures[cacheKey];
+    if (ts == null) return false;
+    return DateTime.now().difference(ts) < const Duration(minutes: 2);
   }
 }
 
@@ -729,7 +790,7 @@ class _WeatherAndTaskCards extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(s.t('today'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(s.todayLabel(), style: const TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
                 Text(s.t('clear')),
                 const SizedBox(height: 12),
@@ -933,7 +994,7 @@ class _CategoriesRow extends StatelessWidget {
       _Category(stringsOf(context).t('Tools and Machinery'), Icons.build_outlined),
     ];
     return SizedBox(
-      height: 96,
+      height: 104, // extra room for longer Hindi/Marathi labels
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         scrollDirection: Axis.horizontal,
@@ -968,7 +1029,7 @@ class _CategoryTile extends StatelessWidget {
           ),
           child: Icon(cat.icon, color: const Color(0xFF0D5EF9)),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         SizedBox(
           width: 84,
           child: Text(
@@ -976,7 +1037,7 @@ class _CategoryTile extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12),
+            style: const TextStyle(fontSize: 12, height: 1.2),
           ),
         ),
       ],
