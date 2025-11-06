@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class DiseaseDetectionScreen extends StatefulWidget {
   const DiseaseDetectionScreen({super.key});
@@ -17,6 +18,9 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> {
   File? _selectedImage;
   bool _isAnalyzing = false;
   Map<String, dynamic>? _detectionResult;
+  // Backend predict endpoint (configurable via .env). Default: local dev server
+  // Example .env: PREDICT_ENDPOINT=http://127.0.0.1:1000/predict
+  late final String _predictEndpoint = dotenv.env['PREDICT_ENDPOINT'] ?? 'http://127.0.0.1:1000/predict';
 
   Future<void> _openCamera() async {
     try {
@@ -32,9 +36,9 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> {
 
       final XFile? photo = await _imagePicker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 80,
-        maxWidth: 1920,
-        maxHeight: 1080,
+        imageQuality: 50,
+        maxWidth: 800,
+        maxHeight: 800,
       );
 
       if (photo != null) {
@@ -83,9 +87,9 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> {
 
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 80,
-        maxWidth: 1920,
-        maxHeight: 1080,
+        imageQuality: 50,
+        maxWidth: 800,
+        maxHeight: 800,
       );
 
       if (image != null) {
@@ -116,45 +120,64 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> {
     setState(() => _isAnalyzing = true);
 
     try {
-      // TODO: Replace with your actual disease detection API
-      // For now, using a mock response
-      await Future.delayed(const Duration(seconds: 2));
-      
-      // Mock disease detection result
-      setState(() {
-        _detectionResult = {
-          'disease': 'Grape Leaf Blight',
-          'confidence': 0.89,
-          'severity': 'Moderate',
-          'description': 'Leaf blight is a fungal disease that affects grape leaves, causing brown spots and eventual leaf death.',
-          'symptoms': [
-            'Brown or black spots on leaves',
-            'Yellowing of leaf margins',
-            'Premature leaf drop',
-            'Reduced fruit quality',
-          ],
-          'treatment': [
-            'Remove and destroy infected leaves',
-            'Apply copper-based fungicide',
-            'Ensure proper air circulation',
-            'Avoid overhead watering',
-          ],
-          'prevention': [
-            'Plant disease-resistant varieties',
-            'Maintain proper spacing between plants',
-            'Practice crop rotation',
-            'Keep the vineyard clean and free of debris',
-          ],
-        };
-      });
+      // Create multipart request (endpoint configurable via .env PREDICT_ENDPOINT)
+      // Ensure URL has a scheme; if user supplied a host-only value like "127.0.0.1:1000/predict",
+      // prepend http:// so Uri.parse works correctly.
+      var endpoint = _predictEndpoint;
+      if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+        endpoint = 'http://' + endpoint;
+      }
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse(endpoint),
+      );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Analysis complete!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      // Add image file to request
+      var imageFile = await http.MultipartFile.fromPath(
+        'file',
+        _selectedImage!.path,
+      );
+      request.files.add(imageFile);
+
+      // Send request
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        // Parse the response
+        final responseData = json.decode(response.body);
+        
+        setState(() {
+          _detectionResult = {
+            'disease': responseData['class'] ?? 'Unknown',
+            'confidence': responseData['confidence'] ?? 0.0,
+            'severity': _getSeverity(responseData['confidence'] ?? 0.0),
+            'description': responseData['description'] ?? 'Disease detected in grape leaf.',
+            'symptoms': responseData['symptoms'] ?? [
+              'Check for visible signs on leaves',
+              'Monitor plant health regularly',
+            ],
+            'treatment': responseData['treatment'] ?? [
+              'Consult with agricultural expert',
+              'Follow recommended treatment procedures',
+            ],
+            'prevention': responseData['prevention'] ?? [
+              'Maintain proper vineyard hygiene',
+              'Regular monitoring and inspection',
+            ],
+          };
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Analysis complete!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        throw Exception('Server returned ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
       print('❌ Error analyzing image: $e');
@@ -163,12 +186,19 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> {
           SnackBar(
             content: Text('Analysis failed: $e'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
     } finally {
       setState(() => _isAnalyzing = false);
     }
+  }
+
+  String _getSeverity(double confidence) {
+    if (confidence >= 0.8) return 'High';
+    if (confidence >= 0.6) return 'Moderate';
+    return 'Low';
   }
 
   void _showImageSourceDialog() {
@@ -224,353 +254,485 @@ class _DiseaseDetectionScreenState extends State<DiseaseDetectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: const Text('Disease Detection'),
         backgroundColor: const Color(0xFF0D5EF9),
         foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Instructions Card
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue.shade700),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'How it works',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildStep('1', 'Take or upload a clear photo of the affected plant'),
-                    const SizedBox(height: 8),
-                    _buildStep('2', 'Our AI analyzes the image for diseases'),
-                    const SizedBox(height: 8),
-                    _buildStep('3', 'Get diagnosis and treatment recommendations'),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Image Preview Section
-            if (_selectedImage != null) ...[
-              const Text(
-                'Selected Image',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(
-                  _selectedImage!,
-                  height: 300,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Action Buttons
-            if (_selectedImage == null)
-              Column(
-                children: [
-                  const SizedBox(height: 20),
-                  Icon(
-                    Icons.image_search,
-                    size: 80,
-                    color: Colors.grey.shade300,
+            // Hero Section with Steps
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No image selected',
+                ],
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    'Heal your crop',
                     style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey.shade600,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 32),
+                  
+                  // Process Steps
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildProcessStep(
+                        Icons.camera_alt,
+                        'Take a\npicture',
+                        const Color(0xFF0D5EF9),
+                      ),
+                      _buildArrow(),
+                      _buildProcessStep(
+                        Icons.description,
+                        'See\ndiagnosis',
+                        const Color(0xFF0D5EF9),
+                      ),
+                      _buildArrow(),
+                      _buildProcessStep(
+                        Icons.local_hospital,
+                        'Get\nmedicine',
+                        const Color(0xFF0D5EF9),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Take Picture Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isAnalyzing ? null : _showImageSourceDialog,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0D5EF9),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: const Text(
+                        'Take a picture',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-
-            ElevatedButton.icon(
-              onPressed: _isAnalyzing ? null : _showImageSourceDialog,
-              icon: const Icon(Icons.add_a_photo),
-              label: Text(_selectedImage == null ? 'Select Image' : 'Change Image'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0D5EF9),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
             ),
-
-            if (_selectedImage != null && _detectionResult == null && !_isAnalyzing)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: OutlinedButton.icon(
-                  onPressed: _analyzeImage,
-                  icon: const Icon(Icons.analytics),
-                  label: const Text('Analyze Again'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+            
+            // Selected Image Preview
+            if (_selectedImage != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.file(
+                    _selectedImage!,
+                    height: 300,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
-
+            ],
+            
             // Loading Indicator
             if (_isAnalyzing) ...[
-              const SizedBox(height: 24),
-              const Center(
-                child: Column(
+              const SizedBox(height: 32),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Column(
                   children: [
-                    CircularProgressIndicator(),
+                    CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0D5EF9)),
+                    ),
                     SizedBox(height: 16),
-                    Text('Analyzing image...'),
+                    Text(
+                      '🔬 Analyzing your plant...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'This may take a few seconds',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 14,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
-
+            
             // Detection Results
             if (_detectionResult != null) ...[
               const SizedBox(height: 24),
-              Card(
-                elevation: 4,
-                color: Colors.red.shade50,
+              
+              // Disease Card
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.red.shade400, Colors.red.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.warning, color: Colors.red.shade700, size: 28),
-                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.coronavirus,
+                              color: Colors.white,
+                              size: 32,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  _detectionResult!['disease'],
+                                const Text(
+                                  'Detected Disease',
                                   style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red.shade900,
+                                    color: Colors.white70,
+                                    fontSize: 14,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _getSeverityColor(_detectionResult!['severity']),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        _detectionResult!['severity'],
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '${(_detectionResult!['confidence'] * 100).toStringAsFixed(0)}% confident',
-                                      style: TextStyle(
-                                        color: Colors.grey.shade700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
+                                Text(
+                                  _detectionResult!['disease'],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _detectionResult!['description'],
-                        style: const TextStyle(fontSize: 14),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          _buildStatChip(
+                            '${(_detectionResult!['confidence'] * 100).toStringAsFixed(0)}%',
+                            'Confidence',
+                          ),
+                          const SizedBox(width: 12),
+                          _buildStatChip(
+                            _detectionResult!['severity'],
+                            'Severity',
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
-
+              
               const SizedBox(height: 16),
-
-              // Symptoms Section
-              _buildInfoCard(
+              
+              // Description Card
+              _buildDetailCard(
+                'Description',
+                Icons.info_outline,
+                _detectionResult!['description'],
+                Colors.blue,
+              ),
+              
+              // Symptoms Card
+              _buildListCard(
                 'Symptoms',
-                Icons.coronavirus,
+                Icons.healing,
                 _detectionResult!['symptoms'],
                 Colors.orange,
               ),
-
-              const SizedBox(height: 16),
-
-              // Treatment Section
-              _buildInfoCard(
+              
+              // Treatment Card
+              _buildListCard(
                 'Treatment',
                 Icons.medication,
                 _detectionResult!['treatment'],
                 Colors.green,
               ),
-
-              const SizedBox(height: 16),
-
-              // Prevention Section
-              _buildInfoCard(
+              
+              // Prevention Card
+              _buildListCard(
                 'Prevention',
                 Icons.shield,
                 _detectionResult!['prevention'],
-                Colors.blue,
+                Colors.purple,
               ),
-
+              
               const SizedBox(height: 24),
-
-              // Action Buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        // TODO: Implement save functionality
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('💾 Result saved!')),
-                        );
-                      },
-                      icon: const Icon(Icons.save),
-                      label: const Text('Save Result'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        // TODO: Implement share functionality
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('📤 Sharing...')),
-                        );
-                      },
-                      icon: const Icon(Icons.share),
-                      label: const Text('Share'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0D5EF9),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
             ],
-
-            const SizedBox(height: 24),
+            
+            const SizedBox(height: 32),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStep(String number, String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildProcessStep(IconData icon, String label, Color color) {
+    return Column(
       children: [
-        CircleAvatar(
-          radius: 12,
-          backgroundColor: const Color(0xFF0D5EF9),
-          child: Text(
-            number,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color, width: 2),
           ),
+          child: Icon(icon, size: 40, color: color),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(fontSize: 14),
+        const SizedBox(height: 12),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            height: 1.3,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildInfoCard(String title, IconData icon, List<dynamic> items, Color color) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: color),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+  Widget _buildArrow() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 32),
+      child: Icon(
+        Icons.arrow_forward,
+        color: Colors.grey.shade400,
+        size: 28,
+      ),
+    );
+  }
+
+  Widget _buildStatChip(String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 12),
-            ...items.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.check_circle, color: color, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      item.toString(),
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ],
+          ),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailCard(String title, IconData icon, String content, Color color) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 24),
               ),
-            )),
-          ],
-        ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            content,
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey.shade700,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListCard(String title, IconData icon, List<dynamic> items, Color color) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...items.map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        item.toString(),
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey.shade700,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )).toList(),
+        ],
       ),
     );
   }
