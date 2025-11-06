@@ -1,8 +1,10 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'src/auth/auth_service2.dart';
@@ -12,6 +14,7 @@ import 'src/screens/add_crop_screen.dart';
 import 'src/screens/new_post_screen.dart';
 import 'src/screens/crops_list_screen.dart';
 import 'src/screens/disease_detection_screen.dart';
+import 'src/screens/crop_details_screen.dart';
 import 'src/screens/chatbot_screen.dart';
 import 'src/screens/profile_settings_screen.dart';
 import 'src/screens/notifications_screen.dart';
@@ -26,6 +29,10 @@ import 'package:http/http.dart' as http;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
+  
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -863,12 +870,13 @@ class _RootScaffoldState extends State<RootScaffold> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = const [
-    CropsListScreen(),
+    HomeScreen(),
     CommunityScreen(),
     ChatbotScreen(),
     MarketScreen(),
     ProfileScreen(),
   ];
+
 
   @override
   Widget build(BuildContext context) {
@@ -2583,20 +2591,30 @@ class _StatRow extends StatelessWidget {
   }
 }
 
-class _CropChipsRow extends StatelessWidget {
+class _CropChipsRow extends StatefulWidget {
+  @override
+  State<_CropChipsRow> createState() => _CropChipsRowState();
+}
+
+class _CropChipsRowState extends State<_CropChipsRow> {
+  static const Map<String, String> _cropEmojis = {
+    'Tomato': '🍅',
+    'Onion': '🧅',
+    'Brinjal': '🍆',
+    'Cucumber': '🥒',
+    'Wheat': '🌾',
+    'Rice': '🍚',
+    'Cotton': '🧶',
+    'Pumpkin': '🎃',
+    'Mango': '🥭',
+    'Grapes': '🍇',
+    'Potato': '🥔',
+    'Carrot': '🥕',
+  };
+
   @override
   Widget build(BuildContext context) {
-    final crops = [
-      {'emoji': '🍅', 'name': 'Tomato', 'status': 'Healthy', 'area': '0.5 acre'},
-      {'emoji': '🧅', 'name': 'Onion', 'status': 'Healthy', 'area': '1.2 acre'},
-      {'emoji': '🍆', 'name': 'Brinjal', 'status': 'Disease Detected', 'area': '0.8 acre'},
-      {'emoji': '🥒', 'name': 'Cucumber', 'status': 'Needs Care', 'area': '0.6 acre'},
-      {'emoji': '🌾', 'name': 'Wheat', 'status': 'Growing Well', 'area': '2.0 acre'},
-      {'emoji': '🍚', 'name': 'Rice', 'status': 'Healthy', 'area': '1.5 acre'},
-      {'emoji': '🧶', 'name': 'Cotton', 'status': 'Flowering', 'area': '1.8 acre'},
-      {'emoji': '🎃', 'name': 'Pumpkin', 'status': 'Healthy', 'area': '0.3 acre'},
-      {'emoji': '+', 'name': 'Add Crop', 'status': '', 'area': ''},
-    ];
+    final user = FirebaseAuth.instance.currentUser;
     
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
@@ -2617,85 +2635,118 @@ class _CropChipsRow extends StatelessWidget {
           ),
         ),
         SizedBox(
-          // increase height slightly to avoid RenderFlex overflow on small screens
           height: isDesktop ? 140 : (isTablet ? 120 : 110),
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemBuilder: (context, i) {
-              final crop = crops[i];
-              final isAddButton = i == crops.length - 1;
-              
-              return Column(
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      if (isAddButton) {
-                        // Show add crop dialog
-                        _showAddCropDialog(context);
-                      } else {
-                        // Show crop details
-                        _showCropDetails(context, crop);
-                      }
-                    },
-                    child: Container(
-                      width: isDesktop ? 80 : (isTablet ? 70 : 60),
-                      height: isDesktop ? 80 : (isTablet ? 70 : 60),
-                      decoration: BoxDecoration(
-                        color: isAddButton 
-                          ? Colors.grey.shade100 
-                          : _getStatusColor(crop['status']!),
-                        borderRadius: BorderRadius.circular(isDesktop ? 20 : 16),
-                        border: Border.all(
-                          color: isAddButton ? Colors.grey.shade300 : Colors.transparent,
-                          width: 1,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          crop['emoji']!,
-                          style: TextStyle(fontSize: isDesktop ? 36 : (isTablet ? 32 : 28)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                                     if (!isAddButton) ...[
-                     Text(
-                       crop['name']!,
-                       style: TextStyle(
-                         fontSize: isTablet ? 14 : 12,
-                         fontWeight: FontWeight.w600,
-                       ),
-                     ),
-                     Text(
-                       crop['status']!,
-                       style: TextStyle(
-                         fontSize: isTablet ? 12 : 10,
-                         color: _getStatusTextColor(crop['status']!),
-                       ),
-                     ),
-                     Text(
-                       crop['area']!,
-                       style: TextStyle(
-                         fontSize: isTablet ? 10 : 8,
-                         color: Colors.grey.shade600,
-                       ),
-                     ),
-                   ] else ...[
-                     Text(
-                       crop['name']!,
-                       style: TextStyle(
-                         fontSize: isTablet ? 14 : 12,
-                         color: Colors.grey.shade600,
-                       ),
-                     ),
-                   ],
-                ],
-              );
-            },
-            separatorBuilder: (context, i) => SizedBox(width: isTablet ? 16 : 12),
-            itemCount: crops.length,
-          ),
+          child: user == null
+              ? Center(child: Text('Please login to see your crops'))
+              : StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .collection('quickCrops')
+                      .orderBy('addedAt', descending: false)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    final cropDocs = snapshot.data?.docs ?? [];
+                    final totalItems = cropDocs.length + 1; // +1 for Add button
+                    
+                    return ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemBuilder: (context, i) {
+                        // Add button at the end
+                        if (i == cropDocs.length) {
+                          return Column(
+                            children: [
+                              GestureDetector(
+                                onTap: () => _showAddCropDialog(context),
+                                child: Container(
+                                  width: isDesktop ? 80 : (isTablet ? 70 : 60),
+                                  height: isDesktop ? 80 : (isTablet ? 70 : 60),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(isDesktop ? 20 : 16),
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '+',
+                                      style: TextStyle(fontSize: isDesktop ? 36 : (isTablet ? 32 : 28)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Add Crop',
+                                style: TextStyle(
+                                  fontSize: isTablet ? 14 : 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                        
+                        // Existing crops from Firestore
+                        final cropDoc = cropDocs[i];
+                        final crop = cropDoc.data() as Map<String, dynamic>;
+                        crop['id'] = cropDoc.id;
+                        
+                        return Column(
+                          children: [
+                            GestureDetector(
+                              onTap: () => _showCropDetails(context, crop),
+                              child: Container(
+                                width: isDesktop ? 80 : (isTablet ? 70 : 60),
+                                height: isDesktop ? 80 : (isTablet ? 70 : 60),
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(crop['status'] ?? 'Healthy'),
+                                  borderRadius: BorderRadius.circular(isDesktop ? 20 : 16),
+                                  border: Border.all(
+                                    color: Colors.transparent,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    crop['emoji'] ?? '🌱',
+                                    style: TextStyle(fontSize: isDesktop ? 36 : (isTablet ? 32 : 28)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              crop['name'] ?? '',
+                              style: TextStyle(
+                                fontSize: isTablet ? 14 : 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              crop['status'] ?? 'Healthy',
+                              style: TextStyle(
+                                fontSize: isTablet ? 12 : 10,
+                                color: _getStatusTextColor(crop['status'] ?? 'Healthy'),
+                              ),
+                            ),
+                            Text(
+                              crop['area'] ?? '0 acre',
+                              style: TextStyle(
+                                fontSize: isTablet ? 10 : 8,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                      separatorBuilder: (context, i) => SizedBox(width: isTablet ? 16 : 12),
+                      itemCount: totalItems,
+                    );
+                  },
+                ),
         ),
       ],
     );
@@ -2728,101 +2779,166 @@ class _CropChipsRow extends StatelessWidget {
   }
 
   void _showAddCropDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final varietyController = TextEditingController();
+    final areaController = TextEditingController();
+    final plantingDateController = TextEditingController();
+    String? selectedCrop;
+
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-                     title: const Text('Add New Crop'),
-           content: Column(
-             mainAxisSize: MainAxisSize.min,
-             children: [
-               TextField(
-                 decoration: const InputDecoration(
-                   labelText: 'Crop Name',
-                   hintText: 'e.g., Wheat, Rice, Cotton',
-                 ),
-               ),
-               const SizedBox(height: 16),
-               TextField(
-                 decoration: const InputDecoration(
-                   labelText: 'Variety',
-                   hintText: 'e.g., HD-2967, PBW-343, Basmati',
-                 ),
-               ),
-               const SizedBox(height: 16),
-               TextField(
-                 decoration: const InputDecoration(
-                   labelText: 'Area (in acres)',
-                   hintText: 'e.g., 2.5',
-                 ),
-               ),
-               const SizedBox(height: 16),
-               TextField(
-                 decoration: const InputDecoration(
-                   labelText: 'Planting Date',
-                   hintText: 'e.g., 15 Nov 2024',
-                 ),
-               ),
-             ],
-           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Crop added successfully!')),
-                );
-              },
-              child: const Text('Add'),
-            ),
-          ],
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Add New Crop'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: selectedCrop,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Crop',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _cropEmojis.entries.map((entry) {
+                        return DropdownMenuItem(
+                          value: entry.key,
+                          child: Row(
+                            children: [
+                              Text(entry.value, style: const TextStyle(fontSize: 20)),
+                              const SizedBox(width: 8),
+                              Text(entry.key),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedCrop = value;
+                          nameController.text = value ?? '';
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: varietyController,
+                      decoration: const InputDecoration(
+                        labelText: 'Variety',
+                        hintText: 'e.g., HD-2967, PBW-343, Basmati',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: areaController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Area (in acres)',
+                        hintText: 'e.g., 2.5',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: plantingDateController,
+                      decoration: const InputDecoration(
+                        labelText: 'Planting Date',
+                        hintText: 'e.g., 15 Nov 2024',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    if (selectedCrop == null || selectedCrop!.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select a crop')),
+                      );
+                      return;
+                    }
+                    
+                    if (varietyController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter variety')),
+                      );
+                      return;
+                    }
+
+                    if (areaController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter area')),
+                      );
+                      return;
+                    }
+
+                    try {
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (user != null) {
+                        await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(user.uid)
+                          .collection('quickCrops')
+                          .add({
+                            'name': selectedCrop,
+                            'emoji': _cropEmojis[selectedCrop],
+                            'status': 'Healthy',
+                            'area': '${areaController.text} acre',
+                            'variety': varietyController.text,
+                            'plantingDate': plantingDateController.text.isEmpty 
+                              ? DateTime.now().toString().split(' ')[0]
+                              : plantingDateController.text,
+                            'color': 'green',
+                            'addedAt': FieldValue.serverTimestamp(),
+                          });
+                        
+                        Navigator.of(dialogContext).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Crop added successfully!')),
+                        );
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  void _showCropDetails(BuildContext context, Map<String, String> crop) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('${crop['emoji']} ${crop['name']}'),
-                     content: Column(
-             mainAxisSize: MainAxisSize.min,
-             crossAxisAlignment: CrossAxisAlignment.start,
-             children: [
-               Text('Status: ${crop['status']}'),
-               const SizedBox(height: 8),
-               Text('Area: ${crop['area']}'),
-               const SizedBox(height: 8),
-               Text('Planting Date: 15 Nov 2024'),
-               const SizedBox(height: 8),
-               Text('Last Check: 2 days ago'),
-               const SizedBox(height: 8),
-               Text('Next Task: Watering (Tomorrow)'),
-               const SizedBox(height: 8),
-               Text('Fertilizer Due: NPK (Next week)'),
-             ],
-           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Navigate to crop details screen
-              },
-              child: const Text('View Details'),
-            ),
-          ],
-        );
-      },
+  void _showCropDetails(BuildContext context, Map<String, dynamic> crop) {
+    // Directly navigate to CropDetailsScreen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CropDetailsScreen(
+          crop: {
+            'id': crop['id'] ?? 'temp_${crop['name']}',
+            'name': crop['name'] ?? '',
+            'emoji': crop['emoji'] ?? '🌱',
+            'status': crop['status'] ?? 'Healthy',
+            'area': crop['area'] ?? '0 acre',
+            'color': crop['color'] ?? '0xFF4CAF50',
+            'variety': crop['variety'] ?? 'Local',
+            'plantingDate': crop['plantingDate'] ?? DateTime.now().toString().split(' ')[0],
+          },
+        ),
+      ),
     );
   }
 }

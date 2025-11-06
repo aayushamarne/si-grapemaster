@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 // removed google_generative_ai dependency - using Groq REST only
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 // Backend selection removed — this screen now always uses the Groq proxy/request flow.
 
@@ -24,13 +26,18 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   // Groq uses OpenAI-compatible chat completion API
   String _groqEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
   String _groqModel = 'llama-3.1-8b-instant';
-  // Per your request, the real API key is included here for testing. In
-  // production you should not embed secrets in the client.
-  String _groqApiKey = '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';
+  // Fetch API key from environment variables for security
+  late String _groqApiKey;
 
   @override
   void initState() {
     super.initState();
+    
+    // Load API key from environment
+    _groqApiKey = dotenv.env['GROQ_API_KEY'] ?? '';
+    if (_groqApiKey.isEmpty) {
+      print('⚠️ Warning: GROQ_API_KEY not found in environment variables');
+    }
     
      // Initialize model
     // NOTE: some Gemini model names (eg. 'gemini-pro') are not available on
@@ -527,13 +534,57 @@ class _ChatBubble extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    message.text,
-                    style: TextStyle(
-                      color: message.isUser ? Colors.white : Colors.black87,
-                      fontSize: 14,
+                  // Use markdown rendering for assistant messages
+                  if (message.isUser)
+                    Text(
+                      message.text,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                    )
+                  else
+                    MarkdownBody(
+                      data: message.text,
+                      styleSheet: MarkdownStyleSheet(
+                        p: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 14,
+                        ),
+                        strong: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        em: const TextStyle(
+                          fontStyle: FontStyle.italic,
+                          color: Colors.black87,
+                        ),
+                        h1: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        h2: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        h3: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        listBullet: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 14,
+                        ),
+                        code: TextStyle(
+                          backgroundColor: Colors.grey.shade200,
+                          color: const Color(0xFF0D5EF9),
+                          fontFamily: 'monospace',
+                        ),
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 4),
                   Text(
                     _formatTime(message.timestamp),
