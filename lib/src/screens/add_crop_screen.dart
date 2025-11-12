@@ -21,7 +21,7 @@ class _AddCropScreenState extends State<AddCropScreen> {
   final _area = TextEditingController();
   final _cropService = CropService.instance;
   final _imagePicker = ImagePicker();
-  
+
   List<File> _selectedImages = [];
   bool _loading = false;
 
@@ -37,7 +37,7 @@ class _AddCropScreenState extends State<AddCropScreen> {
     print('🔵 Requesting camera permission...');
     final status = await Permission.camera.request();
     print('Camera permission status: $status');
-    
+
     if (status.isGranted) {
       print('✅ Camera permission granted');
       return true;
@@ -85,21 +85,21 @@ class _AddCropScreenState extends State<AddCropScreen> {
 
   Future<bool> _requestStoragePermission() async {
     print('🔵 Requesting storage/photos permission...');
-    
+
     // For Android 13+ (API 33+), use photos permission
     // For older Android, use storage permission
     PermissionStatus status;
-    
+
     // Try photos permission first (for Android 13+)
     status = await Permission.photos.request();
     print('Photos permission status: $status');
-    
+
     // If photos permission not available, try storage
     if (status == PermissionStatus.denied) {
       status = await Permission.storage.request();
       print('Storage permission status: $status');
     }
-    
+
     if (status.isGranted || status.isLimited) {
       print('✅ Storage/Photos permission granted');
       return true;
@@ -161,16 +161,16 @@ class _AddCropScreenState extends State<AddCropScreen> {
         maxWidth: 1920,
         maxHeight: 1080,
       );
-      
+
       if (photo != null) {
         print('✅ Photo captured: ${photo.path}');
         setState(() {
           _selectedImages.add(File(photo.path));
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('📸 Photo captured!')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('📸 Photo captured!')));
         }
       } else {
         print('ℹ️ Camera cancelled by user');
@@ -178,9 +178,9 @@ class _AddCropScreenState extends State<AddCropScreen> {
     } catch (e) {
       print('❌ Error picking image from camera: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -200,7 +200,7 @@ class _AddCropScreenState extends State<AddCropScreen> {
         maxWidth: 1920,
         maxHeight: 1080,
       );
-      
+
       if (images.isNotEmpty) {
         print('✅ ${images.length} image(s) selected');
         setState(() {
@@ -217,9 +217,9 @@ class _AddCropScreenState extends State<AddCropScreen> {
     } catch (e) {
       print('❌ Error picking images from gallery: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -266,20 +266,20 @@ class _AddCropScreenState extends State<AddCropScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Please sign in first')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('❌ Please sign in first')));
       return;
     }
 
     setState(() => _loading = true);
-    
+
     try {
       print('🔵 Starting crop submission...');
-      
+
       // Create crop model
       final crop = CropModel(
         farmerId: user.uid,
@@ -291,22 +291,24 @@ class _AddCropScreenState extends State<AddCropScreen> {
 
       // Add crop to Firestore
       final cropId = await _cropService.addCrop(crop);
-      
+
       // Save images locally if any
       if (_selectedImages.isNotEmpty) {
         print('🔵 Saving ${_selectedImages.length} image(s) locally...');
-        
+
         for (int i = 0; i < _selectedImages.length; i++) {
           if (!mounted) break;
-          
+
           // Show progress
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('� Saving image ${i + 1}/${_selectedImages.length}...'),
+              content: Text(
+                '� Saving image ${i + 1}/${_selectedImages.length}...',
+              ),
               duration: const Duration(seconds: 1),
             ),
           );
-          
+
           // Save image locally and add path to crop
           final imagePath = await _cropService.saveImageLocally(
             cropId,
@@ -317,7 +319,7 @@ class _AddCropScreenState extends State<AddCropScreen> {
       }
 
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ Crop added successfully!'),
@@ -326,7 +328,6 @@ class _AddCropScreenState extends State<AddCropScreen> {
         ),
       );
       Navigator.of(context).pop(true); // Return true to indicate success
-      
     } catch (e) {
       print('❌ Error submitting crop: $e');
       if (!mounted) return;
@@ -347,10 +348,7 @@ class _AddCropScreenState extends State<AddCropScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Crop'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Add Crop'), elevation: 0),
       body: _loading
           ? const Center(
               child: Column(
@@ -380,8 +378,9 @@ class _AddCropScreenState extends State<AddCropScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      validator: (v) =>
-                          v == null || v.trim().isEmpty ? 'Enter crop name' : null,
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Enter crop name'
+                          : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -410,10 +409,13 @@ class _AddCropScreenState extends State<AddCropScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Enter area';
-                        if (double.tryParse(v) == null) return 'Enter valid number';
+                        if (double.tryParse(v) == null)
+                          return 'Enter valid number';
                         return null;
                       },
                     ),
@@ -450,7 +452,7 @@ class _AddCropScreenState extends State<AddCropScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            
+
                             // Add Image Button
                             OutlinedButton.icon(
                               onPressed: _showImageSourceDialog,
@@ -463,7 +465,7 @@ class _AddCropScreenState extends State<AddCropScreen> {
                                 ),
                               ),
                             ),
-                            
+
                             // Display selected images
                             if (_selectedImages.isNotEmpty) ...[
                               const SizedBox(height: 16),
@@ -474,11 +476,15 @@ class _AddCropScreenState extends State<AddCropScreen> {
                                   itemCount: _selectedImages.length,
                                   itemBuilder: (context, index) {
                                     return Padding(
-                                      padding: const EdgeInsets.only(right: 8.0),
+                                      padding: const EdgeInsets.only(
+                                        right: 8.0,
+                                      ),
                                       child: Stack(
                                         children: [
                                           ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                             child: Image.file(
                                               _selectedImages[index],
                                               width: 120,
@@ -496,7 +502,9 @@ class _AddCropScreenState extends State<AddCropScreen> {
                                                   color: Colors.red,
                                                   shape: BoxShape.circle,
                                                 ),
-                                                padding: const EdgeInsets.all(4),
+                                                padding: const EdgeInsets.all(
+                                                  4,
+                                                ),
                                                 child: const Icon(
                                                   Icons.close,
                                                   color: Colors.white,

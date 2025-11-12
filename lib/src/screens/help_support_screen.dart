@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../main.dart';
 
 class HelpSupportScreen extends StatelessWidget {
   const HelpSupportScreen({super.key});
@@ -32,9 +33,11 @@ class HelpSupportScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = stringsOf(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Help & Support'),
+        title: Text(s.t('Help & Support')),
         backgroundColor: const Color(0xFF0D5EF9),
         foregroundColor: Colors.white,
       ),
@@ -57,21 +60,31 @@ class HelpSupportScreen extends StatelessWidget {
                           color: Colors.blue.shade50,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.support_agent, color: Color(0xFF0D5EF9), size: 32),
+                        child: const Icon(
+                          Icons.support_agent,
+                          color: Color(0xFF0D5EF9),
+                          size: 32,
+                        ),
                       ),
                       const SizedBox(width: 16),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Contact Support',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                              s.t('Contact Support'),
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            SizedBox(height: 4),
+                            const SizedBox(height: 4),
                             Text(
-                              'We\'re here to help you 24/7',
-                              style: TextStyle(fontSize: 14, color: Colors.black54),
+                              s.t('We\'re here to help you 24/7'),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.black54,
+                              ),
                             ),
                           ],
                         ),
@@ -81,15 +94,15 @@ class HelpSupportScreen extends StatelessWidget {
                   const SizedBox(height: 20),
                   _buildContactButton(
                     icon: Icons.email,
-                    title: 'Email Support',
-                    subtitle: 'support@grapemaster.com',
+                    title: s.t('Email Support'),
+                    subtitle: 'digambar.shinde@grapesmaster.com',
                     onTap: _sendEmail,
                   ),
                   const SizedBox(height: 12),
                   _buildContactButton(
                     icon: Icons.phone,
-                    title: 'Call Us',
-                    subtitle: '+91-1800-123-4567',
+                    title: s.t('Call Us'),
+                    subtitle: '+91 7972371656',
                     onTap: _makePhoneCall,
                   ),
                 ],
@@ -102,7 +115,10 @@ class HelpSupportScreen extends StatelessWidget {
           Card(
             child: ExpansionTile(
               leading: const Icon(Icons.help_outline, color: Color(0xFF0D5EF9)),
-              title: const Text('Frequently Asked Questions', style: TextStyle(fontWeight: FontWeight.bold)),
+              title: Text(
+                s.t('Frequently Asked Questions'),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               children: [
                 _buildFAQItem(
                   'How do I scan for plant diseases?',
@@ -133,28 +149,31 @@ class HelpSupportScreen extends StatelessWidget {
           Card(
             child: Column(
               children: [
-                const ListTile(
-                  leading: Icon(Icons.link, color: Color(0xFF0D5EF9)),
-                  title: Text('Quick Links', style: TextStyle(fontWeight: FontWeight.bold)),
+                ListTile(
+                  leading: const Icon(Icons.link, color: Color(0xFF0D5EF9)),
+                  title: Text(
+                    s.t('Quick Links'),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
                 _buildLinkTile(
                   icon: Icons.article,
-                  title: 'User Guide',
+                  title: s.t('User Guide'),
                   onTap: () => _launchURL('https://grapemaster.com/guide'),
                 ),
                 _buildLinkTile(
                   icon: Icons.video_library,
-                  title: 'Video Tutorials',
+                  title: s.t('Video Tutorials'),
                   onTap: () => _launchURL('https://youtube.com/@grapemaster'),
                 ),
                 _buildLinkTile(
                   icon: Icons.forum,
-                  title: 'Community Forum',
+                  title: s.t('Community Forum'),
                   onTap: () => _launchURL('https://forum.grapemaster.com'),
                 ),
                 _buildLinkTile(
                   icon: Icons.bug_report,
-                  title: 'Report a Bug',
+                  title: s.t('Report a Bug'),
                   onTap: () => _showFeedbackDialog(context),
                 ),
               ],
@@ -165,21 +184,24 @@ class HelpSupportScreen extends StatelessWidget {
           // App Version Info
           Card(
             color: Colors.grey.shade50,
-            child: const Padding(
-              padding: EdgeInsets.all(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.grey, size: 32),
-                  SizedBox(height: 8),
+                  const Icon(Icons.info_outline, color: Colors.grey, size: 32),
+                  const SizedBox(height: 8),
                   Text(
-                    'GrapeMaster',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    s.t('GrapeMaster'),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  Text('Version 1.0.0', style: TextStyle(fontSize: 13, color: Colors.black54)),
-                  SizedBox(height: 4),
+                  Text(
+                    s.t('Version 1.0.0'),
+                    style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
                     '© 2024 GrapeMaster. All rights reserved.',
-                    style: TextStyle(fontSize: 11, color: Colors.black45),
+                    style: const TextStyle(fontSize: 11, color: Colors.black45),
                   ),
                 ],
               ),
@@ -214,8 +236,17 @@ class HelpSupportScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                  Text(subtitle, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  ),
                 ],
               ),
             ),
@@ -239,7 +270,11 @@ class HelpSupportScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             answer,
-            style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.black87,
+              height: 1.4,
+            ),
           ),
           const Divider(height: 24),
         ],
@@ -247,7 +282,11 @@ class HelpSupportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildLinkTile({required IconData icon, required String title, required VoidCallback onTap}) {
+  Widget _buildLinkTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
     return ListTile(
       leading: Icon(icon, color: Colors.black54),
       title: Text(title),
@@ -258,7 +297,7 @@ class HelpSupportScreen extends StatelessWidget {
 
   void _showFeedbackDialog(BuildContext context) {
     final TextEditingController controller = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -290,7 +329,9 @@ class HelpSupportScreen extends StatelessWidget {
                 const SnackBar(content: Text('Thank you for your feedback!')),
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D5EF9)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D5EF9),
+            ),
             child: const Text('Submit', style: TextStyle(color: Colors.white)),
           ),
         ],

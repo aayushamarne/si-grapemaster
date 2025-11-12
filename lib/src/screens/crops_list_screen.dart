@@ -39,9 +39,9 @@ class CropsListScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AddCropScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const AddCropScreen()));
             },
           ),
         ],
@@ -53,7 +53,7 @@ class CropsListScreen extends StatelessWidget {
           print('   Has data: ${snapshot.hasData}');
           print('   Has error: ${snapshot.hasError}');
           print('   Data length: ${snapshot.data?.length ?? 0}');
-          
+
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
               child: Column(
@@ -81,7 +81,9 @@ class CropsListScreen extends StatelessWidget {
                     onPressed: () {
                       // Force refresh by rebuilding
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const CropsListScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const CropsListScreen(),
+                        ),
                       );
                     },
                     child: const Text('Retry'),
@@ -114,7 +116,9 @@ class CropsListScreen extends StatelessWidget {
                   ElevatedButton.icon(
                     onPressed: () async {
                       await Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const AddCropScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AddCropScreen(),
+                        ),
                       );
                       // Stream will auto-refresh
                     },
@@ -137,9 +141,9 @@ class CropsListScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AddCropScreen()),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const AddCropScreen()));
         },
         child: const Icon(Icons.add),
       ),
@@ -183,9 +187,7 @@ class CropCard extends StatelessWidget {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => CropDetailScreen(crop: crop),
-            ),
+            MaterialPageRoute(builder: (_) => CropDetailScreen(crop: crop)),
           );
         },
         borderRadius: BorderRadius.circular(12),
@@ -195,7 +197,9 @@ class CropCard extends StatelessWidget {
             // Image Section
             if (crop.imagePaths.isNotEmpty)
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
                 child: Image.file(
                   File(crop.imagePaths.first),
                   height: 200,
@@ -205,7 +209,11 @@ class CropCard extends StatelessWidget {
                     return Container(
                       height: 200,
                       color: Colors.grey[300],
-                      child: const Icon(Icons.eco, size: 60, color: Colors.grey),
+                      child: const Icon(
+                        Icons.eco,
+                        size: 60,
+                        color: Colors.grey,
+                      ),
                     );
                   },
                 ),
@@ -215,7 +223,9 @@ class CropCard extends StatelessWidget {
                 height: 200,
                 decoration: BoxDecoration(
                   color: Colors.grey[300],
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
+                  ),
                 ),
                 child: const Center(
                   child: Icon(Icons.eco, size: 60, color: Colors.grey),
@@ -275,10 +285,7 @@ class CropCard extends StatelessWidget {
                   if (crop.variety.isNotEmpty)
                     Text(
                       'Variety: ${crop.variety}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[700],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                     ),
                   const SizedBox(height: 8),
                   Row(
@@ -287,14 +294,15 @@ class CropCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         '${crop.area} acres',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                       const SizedBox(width: 16),
                       if (crop.imagePaths.length > 1) ...[
-                        Icon(Icons.photo_library, size: 16, color: Colors.grey[600]),
+                        Icon(
+                          Icons.photo_library,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '${crop.imagePaths.length} photos',
@@ -310,10 +318,7 @@ class CropCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       'Added ${_formatDate(crop.createdAt!)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[500],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                     ),
                   ],
                 ],
@@ -371,7 +376,9 @@ class CropDetailScreen extends StatelessWidget {
                 context: context,
                 builder: (context) => AlertDialog(
                   title: const Text('Delete Crop'),
-                  content: Text('Are you sure you want to delete ${crop.name}?'),
+                  content: Text(
+                    'Are you sure you want to delete ${crop.name}?',
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context, false),
@@ -379,7 +386,10 @@ class CropDetailScreen extends StatelessWidget {
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                      child: const Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
                     ),
                   ],
                 ),
@@ -396,9 +406,9 @@ class CropDetailScreen extends StatelessWidget {
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('❌ Error: $e')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('❌ Error: $e')));
                   }
                 }
               }
@@ -455,7 +465,9 @@ class CropDetailScreen extends StatelessWidget {
                   _DetailRow(
                     icon: Icons.nature,
                     label: 'Variety',
-                    value: crop.variety.isNotEmpty ? crop.variety : 'Not specified',
+                    value: crop.variety.isNotEmpty
+                        ? crop.variety
+                        : 'Not specified',
                   ),
                   _DetailRow(
                     icon: Icons.straighten,
@@ -471,7 +483,8 @@ class CropDetailScreen extends StatelessWidget {
                     _DetailRow(
                       icon: Icons.calendar_today,
                       label: 'Created',
-                      value: '${crop.createdAt!.day}/${crop.createdAt!.month}/${crop.createdAt!.year}',
+                      value:
+                          '${crop.createdAt!.day}/${crop.createdAt!.month}/${crop.createdAt!.year}',
                     ),
                   if (crop.imagePaths.length > 1) ...[
                     const SizedBox(height: 24),
@@ -486,11 +499,12 @@ class CropDetailScreen extends StatelessWidget {
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
                       itemCount: crop.imagePaths.length,
                       itemBuilder: (context, index) {
                         return ClipRRect(
@@ -537,10 +551,7 @@ class _DetailRow extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 4),
               Text(

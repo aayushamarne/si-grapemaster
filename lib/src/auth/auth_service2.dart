@@ -15,18 +15,25 @@ class AuthService {
 
   User? get currentUser => _auth.currentUser;
 
-  Future<UserCredential> signUp({required String email, required String password, required String name}) async {
+  Future<UserCredential> signUp({
+    required String email,
+    required String password,
+    required String name,
+  }) async {
     try {
       print('🔵 Starting sign up for: $email');
-      final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
       print('✅ User created in Firebase Auth: ${cred.user?.uid}');
-      
+
       final uid = cred.user!.uid;
       // Update the user's display name
       await cred.user!.updateDisplayName(name);
       await cred.user!.reload();
       print('✅ Display name updated to: $name');
-      
+
       // Store user info in Firestore
       await _fs.collection('users').doc(uid).set({
         'name': name,
@@ -42,10 +49,16 @@ class AuthService {
     }
   }
 
-  Future<UserCredential> signIn({required String email, required String password}) async {
+  Future<UserCredential> signIn({
+    required String email,
+    required String password,
+  }) async {
     try {
       print('🔵 Starting sign in for: $email');
-      final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
       print('✅ Signed in successfully: ${cred.user?.uid}');
       return cred;
     } catch (e) {

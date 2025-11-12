@@ -65,7 +65,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: Column(
               children: [
                 const ListTile(
-                  leading: Icon(Icons.notifications_active, color: Color(0xFF0D5EF9)),
+                  leading: Icon(
+                    Icons.notifications_active,
+                    color: Color(0xFF0D5EF9),
+                  ),
                   title: Text(
                     'General',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -204,7 +207,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   ) {
     return SwitchListTile(
       title: Text(title, style: const TextStyle(fontSize: 16)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 13, color: Colors.black54),
+      ),
       value: value,
       onChanged: onChanged,
       activeColor: const Color(0xFF0D5EF9),

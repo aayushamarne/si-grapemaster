@@ -32,7 +32,11 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 SizedBox(height: 12),
                 Text(
                   'Privacy Policy',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 SizedBox(height: 4),
                 Text(
@@ -112,9 +116,7 @@ All third-party services are required to maintain data confidentiality.''',
           ),
 
           // Your Rights
-          _buildSection(
-            'Your Rights',
-            '''You have the right to:
+          _buildSection('Your Rights', '''You have the right to:
 
 • Access your personal data
 • Correct inaccurate information
@@ -123,8 +125,7 @@ All third-party services are required to maintain data confidentiality.''',
 • Export your data
 • Withdraw consent at any time
 
-To exercise these rights, contact us at privacy@grapemaster.com''',
-          ),
+To exercise these rights, contact us at privacy@grapemaster.com'''),
 
           // Cookies and Tracking
           _buildSection(

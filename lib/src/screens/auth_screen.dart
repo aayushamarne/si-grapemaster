@@ -43,7 +43,14 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isSignUp ? 'Account created successfully!' : 'Signed in successfully!'), backgroundColor: Colors.green),
+        SnackBar(
+          content: Text(
+            _isSignUp
+                ? 'Account created successfully!'
+                : 'Signed in successfully!',
+          ),
+          backgroundColor: Colors.green,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -77,28 +84,42 @@ class _AuthScreenState extends State<AuthScreen> {
                 TextFormField(
                   controller: _nameCtrl,
                   decoration: const InputDecoration(labelText: 'Full name'),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Please enter name' : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Please enter name' : null,
                 ),
               TextFormField(
                 controller: _emailCtrl,
                 decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+                validator: (v) => (v == null || !v.contains('@'))
+                    ? 'Enter a valid email'
+                    : null,
               ),
               TextFormField(
                 controller: _passCtrl,
                 decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
-                validator: (v) => (v == null || v.length < 6) ? 'Min 6 chars' : null,
+                validator: (v) =>
+                    (v == null || v.length < 6) ? 'Min 6 chars' : null,
               ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,
-                child: _loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text(_isSignUp ? 'Create account' : 'Sign in'),
+                child: _loading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(_isSignUp ? 'Create account' : 'Sign in'),
               ),
               TextButton(
                 onPressed: () => setState(() => _isSignUp = !_isSignUp),
-                child: Text(_isSignUp ? 'Have an account? Sign in' : 'No account? Sign up'),
-              )
+                child: Text(
+                  _isSignUp
+                      ? 'Have an account? Sign in'
+                      : 'No account? Sign up',
+                ),
+              ),
             ],
           ),
         ),
@@ -106,4 +127,3 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 }
-

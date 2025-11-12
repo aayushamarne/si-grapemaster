@@ -23,7 +23,7 @@ class CropService {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = '${cropId}_$timestamp.jpg';
       final localPath = path.join(appDir.path, 'crops', userId, fileName);
-      
+
       // Create directory if it doesn't exist
       final directory = Directory(path.dirname(localPath));
       if (!await directory.exists()) {
@@ -32,7 +32,7 @@ class CropService {
 
       // Copy image to local storage
       final savedImage = await imageFile.copy(localPath);
-      
+
       print('✅ Image saved locally: $localPath');
       return savedImage.path;
     } catch (e) {
@@ -77,29 +77,29 @@ class CropService {
     }
 
     print('🔵 Getting crops for user: $userId');
-    
+
     // Remove orderBy to avoid index requirement initially
     return _firestore
         .collection('crops')
         .where('farmerId', isEqualTo: userId)
         .snapshots()
         .map((snapshot) {
-      print('✅ Received ${snapshot.docs.length} crop(s) from Firestore');
-      final crops = snapshot.docs.map((doc) {
-        print('  - Crop: ${doc.data()['name']} (ID: ${doc.id})');
-        return CropModel.fromFirestore(doc);
-      }).toList();
-      
-      // Sort in memory instead
-      crops.sort((a, b) {
-        if (a.createdAt == null && b.createdAt == null) return 0;
-        if (a.createdAt == null) return 1;
-        if (b.createdAt == null) return -1;
-        return b.createdAt!.compareTo(a.createdAt!);
-      });
-      
-      return crops;
-    });
+          print('✅ Received ${snapshot.docs.length} crop(s) from Firestore');
+          final crops = snapshot.docs.map((doc) {
+            print('  - Crop: ${doc.data()['name']} (ID: ${doc.id})');
+            return CropModel.fromFirestore(doc);
+          }).toList();
+
+          // Sort in memory instead
+          crops.sort((a, b) {
+            if (a.createdAt == null && b.createdAt == null) return 0;
+            if (a.createdAt == null) return 1;
+            if (b.createdAt == null) return -1;
+            return b.createdAt!.compareTo(a.createdAt!);
+          });
+
+          return crops;
+        });
   }
 
   // Get a single crop by ID
@@ -147,7 +147,7 @@ class CropService {
           }
         }
       }
-      
+
       await _firestore.collection('crops').doc(cropId).delete();
       print('✅ Crop deleted successfully');
     } catch (e) {

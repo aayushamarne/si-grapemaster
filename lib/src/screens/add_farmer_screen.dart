@@ -30,7 +30,9 @@ class _AddFarmerScreenState extends State<AddFarmerScreen> {
     if (!_formKey.currentState!.validate()) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please sign in first')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please sign in first')));
       return;
     }
     setState(() => _loading = true);
@@ -45,10 +47,14 @@ class _AddFarmerScreenState extends State<AddFarmerScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Farmer saved')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Farmer saved')));
       Navigator.of(context).pop();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       setState(() => _loading = false);
     }
@@ -67,7 +73,8 @@ class _AddFarmerScreenState extends State<AddFarmerScreen> {
               TextFormField(
                 controller: _farmName,
                 decoration: const InputDecoration(labelText: 'Farm name'),
-                validator: (v) => v == null || v.isEmpty ? 'Enter farm name' : null,
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Enter farm name' : null,
               ),
               TextFormField(
                 controller: _phone,
@@ -85,8 +92,10 @@ class _AddFarmerScreenState extends State<AddFarmerScreen> {
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,
-                child: _loading ? const CircularProgressIndicator() : const Text('Save'),
-              )
+                child: _loading
+                    ? const CircularProgressIndicator()
+                    : const Text('Save'),
+              ),
             ],
           ),
         ),
