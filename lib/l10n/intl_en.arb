@@ -1,0 +1,23 @@
+{
+  "@@locale": "en",
+  "appTitle": "GrapeMaster",
+  "farmingAssistant": "Farming Assistant",
+  "assistantWelcome": "Hello! 👋 I'm your farming assistant. Ask me anything about:\n\n• Grape farming & diseases\n• Pest management\n• Irrigation tips\n• Fertilizer recommendations\n• Weather-based advice\n\nHow can I help you today?",
+  "askAboutFarming": "Ask about farming...",
+  "assistantTyping": "Assistant is typing...",
+  "chatSettings": "Chat settings",
+  "clearChatTooltip": "Clear chat",
+  "chatSettingsSaved": "Chat settings saved and validated.",
+  "chatSettingsSavedFailed": "Chat settings saved (validation failed)",
+  "groqInvalidApiKeySnack": "Groq returned 401 — invalid API key.",
+  "voiceComingSoon": "Voice input coming soon!",
+  "chatCleared": "Chat cleared! How can I help you?"
+  ,
+  "disease_powdery_mildew": "Powdery Mildew"
+  ,
+  "disease_downy_mildew": "Downy Mildew",
+  "disease_black_rot": "Black Rot",
+  "disease_botrytis_bunch_rot": "Botrytis (Grey Mold)",
+  "disease_anthracnose": "Anthracnose",
+  "disease_leaf_spot": "Leaf Spot"
+}

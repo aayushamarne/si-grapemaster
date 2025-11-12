@@ -4,9 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart';
 import 'src/auth/auth_service2.dart';
 import 'src/screens/auth_screen.dart';
 import 'src/screens/add_farmer_screen.dart';
@@ -22,25 +25,35 @@ import 'src/screens/language_screen.dart';
 import 'src/screens/help_support_screen.dart';
 import 'src/screens/privacy_policy_screen.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+// Generated localizations (will be created by Flutter gen_l10n)
+import 'package:grapemaster/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'src/services/weather_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Load environment variables
   await dotenv.load(fileName: ".env");
-  
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    print('✅ Firebase initialized successfully');
-  } catch (e) {
-    print('❌ Firebase initialization error: $e');
+
+  // Initialize Firebase early so other services can use it
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Apply saved locale if present and pre-load translations
+  final prefs = await SharedPreferences.getInstance();
+  final code = prefs.getString('selected_locale');
+  if (code != null) {
+    LocaleController.instance.setLocale(Locale(code));
   }
+  await TranslationController.instance.ensureLoaded(LocaleController.instance.locale?.languageCode ?? 'en');
+
   runApp(const GrapemasterApp());
 }
 
@@ -52,34 +65,16 @@ class GrapemasterApp extends StatefulWidget {
 }
 
 class _GrapemasterAppState extends State<GrapemasterApp> {
+  bool _isReady = true; // initialization done in main()
+  bool _needsLanguageSelection = LocaleController.instance.locale == null;
+
   final LocaleController _localeController = LocaleController.instance;
   final TranslationController _translationController = TranslationController.instance;
-  bool _isReady = false;
-  bool _needsLanguageSelection = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _bootstrap();
-  }
-
-  Future<void> _bootstrap() async {
-    final prefs = await SharedPreferences.getInstance();
-    final code = prefs.getString('selected_locale');
-    if (code != null) {
-      _localeController.setLocale(Locale(code));
-      _needsLanguageSelection = false;
-    }
-    // Ensure translations for the initial or saved locale are loaded
-    await _translationController.ensureLoaded(_localeController.locale?.languageCode ?? 'en');
-    setState(() => _isReady = true);
-  }
 
   Future<void> _onLanguageChosen(Locale locale) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('selected_locale', locale.languageCode);
     _localeController.setLocale(locale);
-    // Load translations for the newly selected locale and trigger UI rebuild
     await _translationController.ensureLoaded(locale.languageCode);
     _translationController.notifyListeners(); // Force UI rebuild
     setState(() => _needsLanguageSelection = false);
@@ -102,6 +97,7 @@ class _GrapemasterAppState extends State<GrapemasterApp> {
           locale: _localeController.locale,
           supportedLocales: const [Locale('en'), Locale('hi'), Locale('mr')],
           localizationsDelegates: const [
+            AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
@@ -148,8 +144,21 @@ class AppStrings {
   // compile-time duplicate-key error).
   static final Map<String, Map<String, String>> _fallbackData = {
     'en': {
+    'Contact Support': 'Contact Support',
+  'We\'re here to help you 24/7': 'We\'re here to help you 24/7',
+  'Email Support': 'Email Support',
+  'Call Us': 'Call Us',
+  'Frequently Asked Questions': 'Frequently Asked Questions',
+  'Quick Links': 'Quick Links',
+  'User Guide': 'User Guide',
+  'Video Tutorials': 'Video Tutorials',
+  'Community Forum': 'Community Forum',
+  'Report a Bug': 'Report a Bug',
+  'GrapeMaster': 'GrapeMaster',
+  'Version 1.0.0': 'Version 1.0.0',
              'app_title': 'GrapeMaster',
-      'tab_crops': 'Your crops',
+        'tab_crops': 'Your crops',
+        'tab_ai': 'AI Assistant',
       'tab_community': 'Community',
       'tab_market': 'Market',
       'tab_you': 'You',
@@ -170,7 +179,8 @@ class AppStrings {
       'Profile': 'Profile',
       'Accept': 'Accept',
       'Namaste!': 'Namaste!',
-             'Select your GrapeMaster language': 'Select your GrapeMaster language',
+        'Select your GrapeMaster language': 'Select your GrapeMaster language',
+      'Choose your preferred language for the app': 'Choose your preferred language for the app',
       'मराठी': 'मराठी',
       'हिन्दी': 'हिन्दी',
       'English': 'English',
@@ -242,13 +252,44 @@ class AppStrings {
       'App version and information': 'App version and information',
       'Settings': 'Settings',
       'Account Actions': 'Account Actions',
-      'Sign Out': 'Sign Out',
+  'Sign Out': 'Sign Out',
+  'Sign in / Sign up': 'Sign in / Sign up',
+  'Not signed in': 'Not signed in',
+  'New Post': 'New Post',
       'Delete Account': 'Delete Account',
       'Quick Actions': 'Quick Actions',
       'Take Photo': 'Take Photo',
       'History': 'History',
       'Favorites': 'Favorites',
       'Share App': 'Share App',
+  'grow_smart_title': 'Grow smart together!',
+  'grow_smart_desc': 'Share GrapeMaster and help farmers solve their grape problems.',
+  'share_grapemaster': 'Share GrapeMaster',
+  'feedback_title': 'How is your experience with GrapeMaster app?',
+  'feedback_desc': 'We\'d love to hear your thoughts and suggestions.',
+  'give_feedback': 'Give Feedback',
+  'chat_welcome': 'Hello! 👋 I\'m GrapeMaster AI, your specialized farming assistant.\n\n🌾 I can help you with: • Grape farming & viticulture • Crop diseases & pest management • Irrigation & water management • Fertilizers & soil health • Weather-based farming advice • Agricultural techniques & best practices\n\n⚠️ Note: I only answer farming and agriculture-related questions. For other topics, please consult appropriate resources.\n\nHow can I help with your farming needs today?',
+  'chat_welcome_nobrand': 'Hello! 👋 I\'m your specialized farming assistant.\n\n🌾 I can help you with: • Grape farming & viticulture • Crop diseases & pest management • Irrigation & water management • Fertilizers & soil health • Weather-based farming advice • Agricultural techniques & best practices\n\n⚠️ Note: I only answer farming and agriculture-related questions. For other topics, please consult appropriate resources.\n\nHow can I help with your farming needs today?',
+  'chat_system_prompt': 'You are a specialized farming assistant focused ONLY on agriculture, farming, and crop cultivation topics. Provide expert, practical, and concise advice farmers can apply. If a question is not related to farming or agriculture, politely decline and ask the user to ask about crops, pests, irrigation, soil health, or other farming topics.',
+  'chat_respond_in': 'Please respond in {lang}.',
+  'Chat history': 'Chat history',
+  'No saved chats': 'No saved chats',
+  'Load history': 'Load history',
+  'Clear saved history': 'Clear saved history',
+  'Chat history cleared': 'Chat history cleared',
+  'You': 'You',
+  'Assistant': 'Assistant',
+  'disease_powdery_mildew': 'Powdery Mildew',
+  'disease_downy_mildew': 'Downy Mildew',
+  'disease_black_rot': 'Black Rot',
+  'disease_botrytis_bunch_rot': 'Botrytis (Grey Mold)',
+  'disease_anthracnose': 'Anthracnose',
+  'disease_leaf_spot': 'Leaf Spot',
+  'disease_healthy': 'Healthy',
+  'Plant Status': 'Plant Status',
+  'Detected Disease': 'Detected Disease',
+  'Confidence': 'Confidence',
+  'Severity': 'Severity',
       'Active Crops': 'Active Crops',
       'Days Active': 'Days Active',
       'Rating': 'Rating',
@@ -272,8 +313,21 @@ class AppStrings {
       'Cancel': 'Cancel',
     },
     'hi': {
+      'Contact Support': 'सहायता से संपर्क करें',
+      'We\'re here to help you 24/7': 'हम 24/7 आपकी मदद के लिए यहां हैं',
+      'Email Support': 'ईमेल सहायता',
+      'Call Us': 'हमें कॉल करें',
+      'Frequently Asked Questions': 'अक्सर पूछे जाने वाले प्रश्न',
+      'Quick Links': 'त्वरित लिंक',
+      'User Guide': 'उपयोगकर्ता गाइड',
+      'Video Tutorials': 'वीडियो ट्यूटोरियल',
+      'Community Forum': 'समुदाय मंच',
+      'Report a Bug': 'बग रिपोर्ट करें',
+      'GrapeMaster': 'GrapeMaster',
+      'Version 1.0.0': 'संस्करण 1.0.0',
              'app_title': 'ग्रेपमास्टर',
-      'tab_crops': 'आपकी फ़सलें',
+        'tab_crops': 'आपकी फ़सलें',
+        'tab_ai': 'एआई सहायक',
       'tab_community': 'समुदाय',
       'tab_market': 'बाज़ार',
       'tab_you': 'आप',
@@ -294,7 +348,8 @@ class AppStrings {
       'Profile': 'प्रोफ़ाइल',
       'Accept': 'स्वीकार करें',
       'Namaste!': 'नमस्ते!',
-             'Select your GrapeMaster language': 'अपनी ग्रेपमास्टर भाषा चुनें',
+        'Select your GrapeMaster language': 'अपनी ग्रेपमास्टर भाषा चुनें',
+      'Choose your preferred language for the app': 'ऐप के लिए अपनी पसंदीदा भाषा चुनें',
       'मराठी': 'मराठी',
       'हिन्दी': 'हिन्दी',
       'English': 'English',
@@ -342,27 +397,60 @@ class AppStrings {
       'Settings': 'सेटिंग्स',
       'Account Actions': 'खाता कार्य',
       'Sign Out': 'साइन आउट',
+  'Sign in / Sign up': 'साइन इन / साइन अप',
+  'Not signed in': 'साइन इन नहीं हुआ',
+  'New Post': 'नया पोस्ट',
       'Delete Account': 'खाता हटाएं',
       'Quick Actions': 'त्वरित कार्य',
       'Take Photo': 'फोटो लें',
       'History': 'इतिहास',
       'Favorites': 'पसंदीदा',
       'Share App': 'ऐप साझा करें',
+  'grow_smart_title': 'साथ मिलकर स्मार्ट खेती करें!',
+  'grow_smart_desc': 'GrapeMaster साझा करें और किसानो को उनके अंगूर की समस्याओं को हल करने में मदद करें।',
+  'share_grapemaster': 'GrapeMaster साझा करें',
+  'feedback_title': 'GrapeMaster ऐप के साथ आपका अनुभव कैसा है?',
+  'feedback_desc': 'हम आपके विचारों और सुझावों को सुनना चाहेंगे।',
+  'give_feedback': 'प्रतिक्रिया दें',
+  'chat_welcome': 'Hello! 👋 मैं GrapeMaster AI हूं, आपका विशेष खेती सहायक।\n\n🌾 मैं आपकी मदद कर सकता हूं: • अंगूर की खेती और वाइनग्रेप • फसल रोग और कीट प्रबंधन • सिंचाई और जल प्रबंधन • उर्वरक और मिट्टी स्वास्थ्य • मौसम-आधारित खेती सलाह • कृषि तकनीक और सर्वोत्तम प्रथाएं\n\n⚠️ नोट: मैं केवल खेती और कृषि से संबंधित प्रश्नों के उत्तर देता/देती हूं। अन्य विषयों के लिए कृपया उपयुक्त संसाधनों की सलाह लें।\n\nमैं आज आपकी खेती में किस तरह मदद कर सकता/सकती हूं?',
+  'chat_welcome_nobrand': 'नमस्ते! 👋 मैं आपका विशेष खेती सहायक हूँ।\n\n🌾 मैं आपकी मदद कर सकता हूं: • अंगूर की खेती और वाइनग्रेप • फसल रोग और कीट प्रबंधन • सिंचाई और जल प्रबंधन • उर्वरक और मिट्टी स्वास्थ्य • मौसम-आधारित खेती सलाह • कृषि तकनीक और सर्वोत्तम प्रथाएं\n\n⚠️ नोट: मैं केवल खेती और कृषि से संबंधित प्रश्नों के उत्तर देता/देती हूं। अन्य विषयों के लिए कृपया उपयुक्त संसाधनों की सलाह लें।\n\nमैं आज आपकी खेती में किस तरह मदद कर सकता/सकती हूं?',
+  'chat_system_prompt': 'आप GrapeMaster AI हैं, एक विशेष खेती सहायक जो केवल कृषि, खेती और फसल उगाने से संबंधित विषयों पर केंद्रित है। किसानों को व्यावहारिक, संक्षिप्त और उपयोगी सलाह दें। यदि प्रश्न खेती या कृषि से संबंधित नहीं है, तो विनम्रता से इनकार करें और उपयोगकर्ता से कहें कि वे फसलों, कीट प्रबंधन, सिंचाई, मिट्टी स्वास्थ्य या अन्य कृषि विषयों के बारे में पूछें।',
+  'chat_respond_in': 'कृपया {lang} में उत्तर दें।',
+  'Chat history': 'चॅट इतिहास',
+  'No saved chats': 'साठवलेली चॅट्स नाहीत',
+  'Load history': 'इतिहास लोड करा',
+  'Clear saved history': 'साठवलेला इतिहास साफ करा',
+  'Chat history cleared': 'चॅट इतिहास साफ केला गेला',
+  'You': 'तुम्ही',
+  'Assistant': 'सहाय्यक',
+    'Chat history': 'चैट इतिहास',
+    'No saved chats': 'कोई सहेजी गई चैट नहीं',
+    'Load history': 'इतिहास लोड करें',
+    'Clear saved history': 'सहेजा गया इतिहास साफ़ करें',
+    'Chat history cleared': 'चैट इतिहास साफ़ कर दिया गया',
+    'You': 'आप',
+    'Assistant': 'सहायक',
       'Active Crops': 'सक्रिय फसलें',
       'Days Active': 'सक्रिय दिन',
       'Rating': 'रेटिंग',
       'Premium Member': 'प्रीमियम सदस्य',
     },
     'mr': {
+      'Contact Support': 'समर्थनाशी संपर्क साधा',
+      'We\'re here to help you 24/7': 'आम्ही 24/7 आपल्या मदतीसाठी येथे आहोत',
+      'Email Support': 'ईमेल समर्थन',
+      'Call Us': 'आम्हाला कॉल करा',
+      'Frequently Asked Questions': 'वारंवार विचारले जाणारे प्रश्न',
+      'Quick Links': 'त्वरित दुवे',
+      'User Guide': 'वापरकर्ता मार्गदर्शक',
+      'Video Tutorials': 'व्हिडिओ ट्युटोरियल',
+      'Community Forum': 'समुदाय फोरम',
+      'Report a Bug': 'बग रिपोर्ट करा',
+      'GrapeMaster': 'GrapeMaster',
+      'Version 1.0.0': 'आवृत्ती 1.0.0',
              'app_title': 'ग्रेपमास्टर',
-      'tab_crops': 'आपली पिके',
-      'tab_community': 'समुदाय',
-      'tab_market': 'बाजार',
-      'tab_you': 'तुम्ही',
-      'heal_your_crop': 'आपल्या पिकाचा उपचार करा',
-      'sponsored': 'प्रायोजित',
-      'take_picture': 'फोटो घ्या',
-      'search_community': 'समुदायात शोधा',
+        'search_community': 'समुदायात शोधा',
+        'tab_ai': 'एआय सहाय्यक',
       'search_market': 'उत्पादन नाव, पिकानुसार शोधा',
       'today': 'आज, २५ ऑगस्ट',
       'clear': 'स्वच्छ • 24°C / 20°C',
@@ -376,7 +464,8 @@ class AppStrings {
       'Profile': 'प्रोफाइल',
       'Accept': 'स्वीकार करा',
       'Namaste!': 'नमस्कार!',
-             'Select your Plantix language': 'आपली ग्रेपमास्टर भाषा निवडा',
+        'Select your GrapeMaster language': 'आपली ग्रेपमास्टर भाषा निवडा',
+      'Choose your preferred language for the app': 'अॅपसाठी आपली आवडती भाषा निवडा',
       'मराठी': 'मराठी',
       'हिन्दी': 'हिन्दी',
       'English': 'English',
@@ -424,12 +513,22 @@ class AppStrings {
       'Settings': 'सेटिंग्ज',
       'Account Actions': 'खाते कृती',
       'Sign Out': 'साइन आउट',
+  'Sign in / Sign up': 'साइन इन / साइन अप',
+  'Not signed in': 'साइन इन झाले नाही',
+  'New Post': 'नवीन पोस्ट',
       'Delete Account': 'खाते हटवा',
       'Quick Actions': 'त्वरित कृती',
       'Take Photo': 'फोटो घ्या',
       'History': 'इतिहास',
       'Favorites': 'आवडी',
       'Share App': 'अॅप शेअर करा',
+  'grow_smart_title': 'एकत्र स्मार्टपणे वाढवा!',
+  'grow_smart_desc': 'GrapeMaster सामायिक करा आणि शेतकऱ्यांना त्यांच्या द्राक्ष समस्यांचे निराकरण करण्यात मदत करा.',
+  'share_grapemaster': 'GrapeMaster शेअर करा',
+  'feedback_title': 'GrapeMaster अॅपसह तुमचा अनुभव कसा आहे?',
+  'feedback_desc': 'आम्हाला तुमच्या कल्पना आणि सुचना ऐकायला आवडतील.',
+  'give_feedback': 'अभिप्राय द्या',
+  'chat_welcome_nobrand': 'नमस्कार! 👋 मी तुमचा विशेष शेती सहाय्यक आहे.\n\n🌾 मी तुमची मदत करू शकतो: • द्राक्ष लागवड व विटीकल्चर • पीक आजार व किड नियंत्रण • सिंचन व पाणी व्यवस्थापन • खत व मातीची आरोग्य • हवामान-आधारित शेती सल्ला • कृषी तंत्र आणि सर्वोत्तम पद्धती\n\n⚠️ लक्षात घ्या: मी फक्त शेती आणि कृषी-संबंधित प्रश्नांना उत्तर देतो/देते. इतर विषयांसाठी कृपया योग्य स्रोतांचा सल्ला घ्या.\n\nआज मी तुमच्या शेतीसाठी कशी मदत करू?',
       'Active Crops': 'सक्रिय पिके',
       'Days Active': 'सक्रिय दिवस',
       'Rating': 'रेटिंग',
@@ -488,7 +587,7 @@ class TranslationController extends ChangeNotifier {
       _memoryCache[code] = map.map((k, v) => MapEntry(k, v.toString()));
       notifyListeners();
     }
-    
+
     // Pre-translate common strings for better UX
     if (code != 'en') {
       await _preTranslateCommonStrings(code);
@@ -497,7 +596,7 @@ class TranslationController extends ChangeNotifier {
 
   Future<void> _preTranslateCommonStrings(String code) async {
     final commonStrings = [
-      'Plantix',
+  'GrapeMaster',
       'Your crops',
       'Community', 
       'Market',
@@ -520,7 +619,7 @@ class TranslationController extends ChangeNotifier {
       'Profile',
       'Accept',
       'Namaste!',
-      'Select your Plantix language',
+  'Select your GrapeMaster language',
       'मराठी',
       'हिन्दी',
       'English',
@@ -753,7 +852,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
               ),
               SizedBox(height: isTablet ? 8 : 6),
               Text(
-                stringsOf(context).t('Select your Plantix language'), 
+                stringsOf(context).t('Select your GrapeMaster language'), 
                 style: TextStyle(
                   fontSize: isTablet ? 18 : 16, 
                   color: Colors.black54
@@ -869,7 +968,9 @@ class RootScaffold extends StatefulWidget {
 class _RootScaffoldState extends State<RootScaffold> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
+  // Keep persistent screen instances so switching tabs doesn't recreate
+  // widgets unnecessarily (recreation can cause focus/IME issues on some devices).
+  final List<Widget> _screens = [
     HomeScreen(),
     CommunityScreen(),
     ChatbotScreen(),
@@ -886,11 +987,11 @@ class _RootScaffoldState extends State<RootScaffold> {
     final isDesktop = screenWidth > 900;
     
     final destinations = [
-      NavigationDestination(icon: const Icon(Icons.spa_outlined), selectedIcon: const Icon(Icons.spa), label: s.t('tab_crops')),
-      NavigationDestination(icon: const Icon(Icons.chat_bubble_outline), selectedIcon: const Icon(Icons.chat_bubble), label: s.t('tab_community')),
-      NavigationDestination(icon: const Icon(Icons.smart_toy_outlined), selectedIcon: const Icon(Icons.smart_toy), label: 'AI Assistant'),
-      NavigationDestination(icon: const Icon(Icons.storefront_outlined), selectedIcon: const Icon(Icons.storefront), label: s.t('tab_market')),
-      NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: s.t('tab_you')),
+  NavigationDestination(icon: const Icon(Icons.spa_outlined), selectedIcon: const Icon(Icons.spa), label: s.t('tab_crops')),
+  NavigationDestination(icon: const Icon(Icons.chat_bubble_outline), selectedIcon: const Icon(Icons.chat_bubble), label: s.t('tab_community')),
+  NavigationDestination(icon: const Icon(Icons.smart_toy_outlined), selectedIcon: const Icon(Icons.smart_toy), label: s.t('tab_ai')),
+  NavigationDestination(icon: const Icon(Icons.storefront_outlined), selectedIcon: const Icon(Icons.storefront), label: s.t('tab_market')),
+  NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: s.t('tab_you')),
     ];
 
     // For desktop, show navigation rail instead of bottom navigation
@@ -924,13 +1025,10 @@ class _RootScaffoldState extends State<RootScaffold> {
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(value: 'auth', child: Text('Sign in / Sign up')),
-                const PopupMenuItem(value: 'add_farmer', child: Text('Add Farmer')),
-                const PopupMenuItem(value: 'add_crop', child: Text('Add Crop')),
-                const PopupMenuItem(value: 'new_post', child: Text('New Post')),
+                PopupMenuItem(value: 'auth', child: Text(stringsOf(context).t('Sign in / Sign up'))),
                 PopupMenuItem(
                   value: 'signout',
-                  child: Text(AuthService.instance.currentUser == null ? 'Not signed in' : 'Sign out'),
+                  child: Text(AuthService.instance.currentUser == null ? stringsOf(context).t('Not signed in') : stringsOf(context).t('Sign Out')),
                 ),
               ],
             ),
@@ -961,6 +1059,8 @@ class _RootScaffoldState extends State<RootScaffold> {
                 label: Text(s.t('take_picture')),
                 backgroundColor: const Color(0xFF0D5EF9),
                 foregroundColor: Colors.white,
+                // Avoid Tooltip (which needs an Overlay) to prevent build-time errors
+                tooltip: null,
               )
             : null,
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -969,64 +1069,67 @@ class _RootScaffoldState extends State<RootScaffold> {
 
     // For mobile and tablet, use bottom navigation
     return Scaffold(
-      appBar: AppBar(
-        title: Text(s.t('app_title')),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) async {
-              switch (value) {
-                case 'auth':
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuthScreen()));
-                  break;
-                case 'add_farmer':
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddFarmerScreen()));
-                  break;
-                case 'add_crop':
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddCropScreen()));
-                  break;
-                case 'new_post':
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => NewPostScreen()));
-                  break;
-                case 'signout':
-                  if (AuthService.instance.currentUser != null) {
-                    await AuthService.instance.signOut();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Signed out')));
-                  }
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'auth', child: Text('Sign in / Sign up')),
-              const PopupMenuItem(value: 'add_farmer', child: Text('Add Farmer')),
-              const PopupMenuItem(value: 'add_crop', child: Text('Add Crop')),
-              const PopupMenuItem(value: 'new_post', child: Text('New Post')),
-              PopupMenuItem(
-                value: 'signout',
-                child: Text(AuthService.instance.currentUser == null ? 'Not signed in' : 'Sign out'),
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: _screens[_currentIndex],
+      // Hide the root app bar when the Assistant (chat) tab is active so the
+      // ChatbotScreen can present its own full-screen UI (no three-dot menu).
+      appBar: _currentIndex == 2
+          ? null
+          : AppBar(
+              title: Text(s.t('app_title')),
+              actions: [
+                PopupMenuButton<String>(
+                  onSelected: (value) async {
+                    switch (value) {
+                      case 'auth':
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuthScreen()));
+                        break;
+                      case 'add_farmer':
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddFarmerScreen()));
+                        break;
+                      case 'add_crop':
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddCropScreen()));
+                        break;
+                      case 'new_post':
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => NewPostScreen()));
+                        break;
+                      case 'signout':
+                        if (AuthService.instance.currentUser != null) {
+                          await AuthService.instance.signOut();
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Signed out')));
+                        }
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(value: 'auth', child: Text(stringsOf(context).t('Sign in / Sign up'))),
+                    PopupMenuItem(
+                      value: 'signout',
+                      child: Text(AuthService.instance.currentUser == null ? stringsOf(context).t('Not signed in') : stringsOf(context).t('Sign Out')),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+
+  // Use the persistent screen instance. ChatbotScreen has its own clear
+  // action (trash icon) to reset the visible chat, so rebuilding the
+  // widget isn't necessary and can break IME behavior on some devices.
+  body: _screens[_currentIndex],
+      floatingActionButton: _currentIndex == 1 // Show FAB only on Community screen
+          ? FloatingActionButton.extended(
+              onPressed: () => CommunityScreen.createPost(context),
+              icon: const Icon(Icons.add),
+              label: Text(stringsOf(context).t('New Post')),
+              backgroundColor: const Color(0xFF0D5EF9),
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: destinations,
         height: isTablet ? 80 : 72,
       ),
-      floatingActionButton: _currentIndex == 0
-          ? FloatingActionButton.extended(
-              onPressed: () => _showCameraDialog(context),
-              icon: const Icon(Icons.camera_alt_outlined),
-              label: Text(s.t('take_picture')),
-              backgroundColor: const Color(0xFF0D5EF9),
-              foregroundColor: Colors.white,
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -1237,8 +1340,359 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class CommunityScreen extends StatelessWidget {
+class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
+
+  @override
+  State<CommunityScreen> createState() => _CommunityScreenState();
+  
+  // Static method to create a post from outside the widget
+  static Future<void> createPost(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to create a post')),
+      );
+      return;
+    }
+
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    String selectedCrop = 'Grape';
+  XFile? selectedImage;
+  Uint8List? selectedImageBytes;
+    
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Container(
+              margin: const EdgeInsets.only(top: 24),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Create New Post', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(dialogContext),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Crop Type', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: selectedCrop,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          isDense: true,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'Grape', child: Text('🍇 Grape')),
+                          DropdownMenuItem(value: 'Wheat', child: Text('🌾 Wheat')),
+                          DropdownMenuItem(value: 'Rice', child: Text('🍚 Rice')),
+                          DropdownMenuItem(value: 'Cotton', child: Text('🧶 Cotton')),
+                          DropdownMenuItem(value: 'Sugarcane', child: Text('🎋 Sugarcane')),
+                          DropdownMenuItem(value: 'Tomato', child: Text('🍅 Tomato')),
+                          DropdownMenuItem(value: 'Onion', child: Text('🧅 Onion')),
+                          DropdownMenuItem(value: 'Brinjal', child: Text('🍆 Brinjal')),
+                          DropdownMenuItem(value: 'Cucumber', child: Text('🥒 Cucumber')),
+                        ],
+                        onChanged: (value) {
+                          setState(() => selectedCrop = value!);
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Title', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: titleController,
+                        decoration: InputDecoration(
+                          hintText: 'e.g., Need help with leaf spots',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          isDense: true,
+                        ),
+                        maxLength: 100,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Description', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: descriptionController,
+                        decoration: InputDecoration(
+                          hintText: 'Describe your issue or share your solution...',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          isDense: true,
+                        ),
+                        maxLines: 4,
+                        maxLength: 500,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Image (Optional)', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      if (selectedImage != null) ...[
+                        Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: selectedImageBytes != null
+                                  ? Image.memory(
+                                      selectedImageBytes!,
+                                      height: 150,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Image.file(
+                                      File(selectedImage!.path),
+                                      height: 150,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                    ),
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: CircleAvatar(
+                                backgroundColor: Colors.red,
+                                child: IconButton(
+                                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                                  onPressed: () {
+                                    setState(() {
+                                      selectedImage = null;
+                                      selectedImageBytes = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          try {
+                            // Permission and picker logic preserved from original implementation
+                            if (Platform.isAndroid) {
+                              final photosGranted = await Permission.photos.isGranted;
+                              final storageGranted = await Permission.storage.isGranted;
+
+                              if (!photosGranted && !storageGranted) {
+                                try {
+                                  final results = await [Permission.photos, Permission.storage].request();
+                                  final anyGranted = results.values.any((s) => s.isGranted);
+                                  final anyPermanentlyDenied = results.values.any((s) => s.isPermanentlyDenied);
+                                  if (anyPermanentlyDenied) {
+                                    if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                      SnackBar(
+                                        content: const Text('Permission permanently denied. Open app settings to enable.'),
+                                        action: SnackBarAction(
+                                          label: 'Settings',
+                                          onPressed: () => openAppSettings(),
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  if (!anyGranted) {
+                                    if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                      const SnackBar(content: Text('Storage or Photos permission is required to pick images')),
+                                    );
+                                    return;
+                                  }
+                                } on PlatformException {
+                                  if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                    const SnackBar(content: Text('Permission request already running. Please try again.')),
+                                  );
+                                  return;
+                                }
+                              }
+                            } else if (Platform.isIOS) {
+                              final photosGranted = await Permission.photos.isGranted;
+                              if (!photosGranted) {
+                                final r = await Permission.photos.request();
+                                if (!r.isGranted) {
+                                  if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                    const SnackBar(content: Text('Photos permission is required to pick images')),
+                                  );
+                                  return;
+                                }
+                              }
+                            }
+
+                            final picker = ImagePicker();
+                            final XFile? image = await picker.pickImage(
+                              source: ImageSource.gallery,
+                              maxWidth: 800,
+                              maxHeight: 800,
+                              imageQuality: 70,
+                            );
+                            if (image != null) {
+                              try {
+                                final bytes = await image.readAsBytes();
+                                if (bytes.length > 600000) {
+                                  if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                    const SnackBar(content: Text('Selected image too large for preview (max ~600KB). Try a smaller image.')),
+                                  );
+                                } else {
+                                  if (dialogContext.mounted) {
+                                    setState(() {
+                                      selectedImage = image;
+                                      selectedImageBytes = bytes;
+                                    });
+                                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                      SnackBar(content: Text('Image selected (${(bytes.length/1024).toStringAsFixed(1)} KB)')),
+                                    );
+                                  }
+                                }
+                              } catch (e) {
+                                if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                  SnackBar(content: Text('Error reading image: $e')),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              SnackBar(content: Text('Error picking image: $e')),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.image),
+                        label: Text(selectedImage == null ? 'Add Image' : 'Change Image'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 40),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: const Text('Cancel'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            onPressed: () async {
+                              if (titleController.text.trim().isEmpty) {
+                                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Please enter a title')),
+                                );
+                                return;
+                              }
+
+                              // Show loading indicator
+                              showDialog(
+                                context: dialogContext,
+                                barrierDismissible: false,
+                                builder: (loadingContext) => WillPopScope(
+                                  onWillPop: () async => false,
+                                  child: const AlertDialog(
+                                    content: Row(
+                                      children: [
+                                        CircularProgressIndicator(),
+                                        SizedBox(width: 20),
+                                        Text('Creating post...'),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+
+                              try {
+                                String? imageData;
+                                if (selectedImage != null) {
+                                  final bytes = selectedImageBytes ?? await File(selectedImage!.path).readAsBytes();
+                                  if (bytes.length > 400000) {
+                                    Navigator.pop(dialogContext); // Close loading
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Image too large (max 400KB). Try reducing quality')),
+                                      );
+                                    }
+                                    return;
+                                  }
+                                  imageData = base64Encode(bytes);
+                                }
+
+                                final postData = {
+                                  'title': titleController.text.trim(),
+                                  'description': descriptionController.text.trim(),
+                                  'crop': selectedCrop,
+                                  'userId': user.uid,
+                                  'userName': user.displayName ?? user.email?.split('@')[0] ?? 'Anonymous',
+                                  'userEmail': user.email ?? '',
+                                  'likes': 0,
+                                  'likedBy': [],
+                                  'comments': 0,
+                                  'createdAt': FieldValue.serverTimestamp(),
+                                  'updatedAt': FieldValue.serverTimestamp(),
+                                };
+
+                                if (imageData != null) postData['imageData'] = imageData;
+
+                                await FirebaseFirestore.instance.collection('communityPosts').add(postData);
+
+                                if (dialogContext.mounted) {
+                                  Navigator.pop(dialogContext); // Close loading
+                                  Navigator.pop(dialogContext); // Close sheet
+                                }
+                                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('✅ Post created successfully!')),
+                                );
+                              } catch (e) {
+                                if (dialogContext.mounted) Navigator.pop(dialogContext); // Close loading
+                                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error creating post: $e')),
+                                );
+                              }
+                            },
+                            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0D5EF9)),
+                            child: const Text('Post'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _CommunityScreenState extends State<CommunityScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedFilter = 'All';
+  
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _createPost(BuildContext context) async {
+    // Just call the static method - no need to duplicate code
+    await CommunityScreen.createPost(context);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1252,37 +1706,107 @@ class CommunityScreen extends StatelessWidget {
         children: [
           Expanded(
             flex: 2,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+            child: Column(
               children: [
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: s.t('search_community'),
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-                    isDense: true,
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: s.t('search_community'),
+                                prefixIcon: const Icon(Icons.search),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
+                                isDense: true,
+                              ),
+                              onChanged: (value) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          FloatingActionButton.extended(
+                            onPressed: () => _createPost(context),
+                            icon: const Icon(Icons.add),
+                            label: const Text('New Post'),
+                            backgroundColor: const Color(0xFF0D5EF9),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          _FilterChip(
+                            label: 'All',
+                            emoji: '📱',
+                            isSelected: _selectedFilter == 'All',
+                            onTap: () => setState(() => _selectedFilter = 'All'),
+                          ),
+                          _FilterChip(
+                            label: s.t('Grape'),
+                            emoji: '🍇',
+                            isSelected: _selectedFilter == 'Grape',
+                            onTap: () => setState(() => _selectedFilter = 'Grape'),
+                          ),
+                          _FilterChip(
+                            label: s.t('Wheat'),
+                            emoji: '🌾',
+                            isSelected: _selectedFilter == 'Wheat',
+                            onTap: () => setState(() => _selectedFilter = 'Wheat'),
+                          ),
+                          _FilterChip(
+                            label: s.t('Rice'),
+                            emoji: '🍚',
+                            isSelected: _selectedFilter == 'Rice',
+                            onTap: () => setState(() => _selectedFilter = 'Rice'),
+                          ),
+                          _FilterChip(
+                            label: s.t('Cotton'),
+                            emoji: '🧶',
+                            isSelected: _selectedFilter == 'Cotton',
+                            onTap: () => setState(() => _selectedFilter = 'Cotton'),
+                          ),
+                          _FilterChip(
+                            label: s.t('Sugarcane'),
+                            emoji: '🎋',
+                            isSelected: _selectedFilter == 'Sugarcane',
+                            onTap: () => setState(() => _selectedFilter = 'Sugarcane'),
+                          ),
+                          _FilterChip(
+                            label: s.t('Tomato'),
+                            emoji: '🍅',
+                            isSelected: _selectedFilter == 'Tomato',
+                            onTap: () => setState(() => _selectedFilter = 'Tomato'),
+                          ),
+                          _FilterChip(
+                            label: s.t('Onion'),
+                            emoji: '🧅',
+                            isSelected: _selectedFilter == 'Onion',
+                            onTap: () => setState(() => _selectedFilter = 'Onion'),
+                          ),
+                          _FilterChip(
+                            label: s.t('Brinjal'),
+                            emoji: '🍆',
+                            isSelected: _selectedFilter == 'Brinjal',
+                            onTap: () => setState(() => _selectedFilter = 'Brinjal'),
+                          ),
+                          _FilterChip(
+                            label: s.t('Cucumber'),
+                            emoji: '🥒',
+                            isSelected: _selectedFilter == 'Cucumber',
+                            onTap: () => setState(() => _selectedFilter = 'Cucumber'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                                 Wrap(
-                   spacing: 12,
-                   runSpacing: 12,
-                   children: [
-                     _FilterChip(label: s.t('Wheat'), emoji: '🌾'),
-                     _FilterChip(label: s.t('Rice'), emoji: '🍚'),
-                     _FilterChip(label: s.t('Cotton'), emoji: '🧶'),
-                     _FilterChip(label: s.t('Sugarcane'), emoji: '🎋'),
-                     _FilterChip(label: s.t('Tomato'), emoji: '🍅'),
-                     _FilterChip(label: s.t('Onion'), emoji: '🧅'),
-                     _FilterChip(label: s.t('Brinjal'), emoji: '🍆'),
-                     _FilterChip(label: s.t('Cucumber'), emoji: '🥒'),
-                   ],
-                 ),
-                const SizedBox(height: 20),
-                _PostCard(
-                  title: s.t('Share desease details'),
-                  subtitle: s.t('Share solutions'),
-                  imageColor: Colors.greenAccent,
+                Expanded(
+                  child: _buildPostsList(),
                 ),
               ],
             ),
@@ -1317,45 +1841,1076 @@ class CommunityScreen extends StatelessWidget {
       );
     }
     
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        isTablet ? 24 : 16, 
-        isTablet ? 12 : 8, 
-        isTablet ? 24 : 16, 
-        16
-      ),
+    return Column(
       children: [
-        TextField(
-          decoration: InputDecoration(
-            hintText: s.t('search_community'),
-            prefixIcon: const Icon(Icons.search),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-            isDense: true,
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            isTablet ? 24 : 16, 
+            isTablet ? 12 : 8, 
+            isTablet ? 24 : 16, 
+            0
+          ),
+          child: Column(
+            children: [
+              TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: s.t('search_community'),
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
+                  isDense: true,
+                ),
+                onChanged: (value) => setState(() {}),
+              ),
+              SizedBox(height: isTablet ? 16 : 12),
+              Wrap(
+                spacing: isTablet ? 12 : 8,
+                runSpacing: isTablet ? 12 : 8,
+                children: [
+                  _FilterChip(
+                    label: 'All',
+                    emoji: '📱',
+                    isSelected: _selectedFilter == 'All',
+                    onTap: () => setState(() => _selectedFilter = 'All'),
+                  ),
+                  _FilterChip(
+                    label: s.t('Grape'),
+                    emoji: '🍇',
+                    isSelected: _selectedFilter == 'Grape',
+                    onTap: () => setState(() => _selectedFilter = 'Grape'),
+                  ),
+                  _FilterChip(
+                    label: s.t('Wheat'),
+                    emoji: '🌾',
+                    isSelected: _selectedFilter == 'Wheat',
+                    onTap: () => setState(() => _selectedFilter = 'Wheat'),
+                  ),
+                  _FilterChip(
+                    label: s.t('Rice'),
+                    emoji: '🍚',
+                    isSelected: _selectedFilter == 'Rice',
+                    onTap: () => setState(() => _selectedFilter = 'Rice'),
+                  ),
+                  _FilterChip(
+                    label: s.t('Cotton'),
+                    emoji: '🧶',
+                    isSelected: _selectedFilter == 'Cotton',
+                    onTap: () => setState(() => _selectedFilter = 'Cotton'),
+                  ),
+                  _FilterChip(
+                    label: s.t('Sugarcane'),
+                    emoji: '🎋',
+                    isSelected: _selectedFilter == 'Sugarcane',
+                    onTap: () => setState(() => _selectedFilter = 'Sugarcane'),
+                  ),
+                  _FilterChip(
+                    label: s.t('Tomato'),
+                    emoji: '🍅',
+                    isSelected: _selectedFilter == 'Tomato',
+                    onTap: () => setState(() => _selectedFilter = 'Tomato'),
+                  ),
+                  _FilterChip(
+                    label: s.t('Onion'),
+                    emoji: '🧅',
+                    isSelected: _selectedFilter == 'Onion',
+                    onTap: () => setState(() => _selectedFilter = 'Onion'),
+                  ),
+                  _FilterChip(
+                    label: s.t('Brinjal'),
+                    emoji: '🍆',
+                    isSelected: _selectedFilter == 'Brinjal',
+                    onTap: () => setState(() => _selectedFilter = 'Brinjal'),
+                  ),
+                  _FilterChip(
+                    label: s.t('Cucumber'),
+                    emoji: '🥒',
+                    isSelected: _selectedFilter == 'Cucumber',
+                    onTap: () => setState(() => _selectedFilter = 'Cucumber'),
+                  ),
+                ],
+              ),
+              SizedBox(height: isTablet ? 16 : 12),
+            ],
           ),
         ),
-        SizedBox(height: isTablet ? 16 : 12),
-                 Wrap(
-           spacing: isTablet ? 12 : 8,
-           runSpacing: isTablet ? 12 : 8,
-           children: [
-             _FilterChip(label: s.t('Wheat'), emoji: '🌾'),
-             _FilterChip(label: s.t('Rice'), emoji: '🍚'),
-             _FilterChip(label: s.t('Cotton'), emoji: '🧶'),
-             _FilterChip(label: s.t('Sugarcane'), emoji: '🎋'),
-             _FilterChip(label: s.t('Tomato'), emoji: '🍅'),
-             _FilterChip(label: s.t('Onion'), emoji: '🧅'),
-             _FilterChip(label: s.t('Brinjal'), emoji: '🍆'),
-             _FilterChip(label: s.t('Cucumber'), emoji: '🥒'),
-           ],
-         ),
-        SizedBox(height: isTablet ? 16 : 12),
-        _PostCard(
-          title: s.t('Share desease details'),
-          subtitle: s.t('Share solutions'),
-          imageColor: Colors.greenAccent,
+        Expanded(
+          child: _buildPostsList(),
         ),
       ],
     );
+  }
+
+  Widget _buildPostsList() {
+    final searchQuery = _searchController.text.toLowerCase();
+    
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('communityPosts')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text('Error: ${snapshot.error}'),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.forum_outlined, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                const Text(
+                  'No posts yet',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text('Be the first to share with the community!'),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => _createPost(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Create Post'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0D5EF9),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Filter posts
+        var posts = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final title = (data['title'] ?? '').toString().toLowerCase();
+          final description = (data['description'] ?? '').toString().toLowerCase();
+          final crop = data['crop'] ?? '';
+
+          // Apply crop filter
+          if (_selectedFilter != 'All' && crop != _selectedFilter) {
+            return false;
+          }
+
+          // Apply search filter
+          if (searchQuery.isNotEmpty) {
+            return title.contains(searchQuery) || description.contains(searchQuery);
+          }
+
+          return true;
+        }).toList();
+
+        if (posts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.search_off, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  searchQuery.isNotEmpty
+                      ? 'No posts found for "$searchQuery"'
+                      : 'No posts in ${_selectedFilter}',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: posts.length,
+          itemBuilder: (context, index) {
+            final doc = posts[index];
+            final data = doc.data() as Map<String, dynamic>;
+            
+            return _DynamicPostCard(
+              postId: doc.id,
+              title: data['title'] ?? 'Untitled',
+              description: data['description'] ?? '',
+              crop: data['crop'] ?? 'Unknown',
+              userName: data['userName'] ?? 'Anonymous',
+              likes: data['likes'] ?? 0,
+              comments: data['comments'] ?? 0,
+              createdAt: data['createdAt'],
+              userId: data['userId'] ?? '',
+              imageData: data['imageData'],
+              likedBy: List<String>.from(data['likedBy'] ?? []),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _DynamicPostCard extends StatelessWidget {
+  final String postId;
+  final String title;
+  final String description;
+  final String crop;
+  final String userName;
+  final int likes;
+  final int comments;
+  final dynamic createdAt;
+  final String userId;
+  final String? imageData;
+  final List<String> likedBy;
+
+  const _DynamicPostCard({
+    required this.postId,
+    required this.title,
+    required this.description,
+    required this.crop,
+    required this.userName,
+    required this.likes,
+    required this.comments,
+    required this.createdAt,
+    required this.userId,
+    this.imageData,
+    required this.likedBy,
+  });
+
+  String _getCropEmoji(String crop) {
+    switch (crop) {
+      case 'Grape': return '🍇';
+      case 'Wheat': return '🌾';
+      case 'Rice': return '🍚';
+      case 'Cotton': return '🧶';
+      case 'Sugarcane': return '🎋';
+      case 'Tomato': return '🍅';
+      case 'Onion': return '🧅';
+      case 'Brinjal': return '🍆';
+      case 'Cucumber': return '🥒';
+      default: return '🌱';
+    }
+  }
+
+  String _getTimeAgo(dynamic timestamp) {
+    if (timestamp == null) return 'Just now';
+    
+    try {
+      final DateTime dateTime = (timestamp as Timestamp).toDate();
+      final difference = DateTime.now().difference(dateTime);
+      
+      if (difference.inDays > 365) {
+        return '${(difference.inDays / 365).floor()} year${(difference.inDays / 365).floor() > 1 ? 's' : ''} ago';
+      } else if (difference.inDays > 30) {
+        return '${(difference.inDays / 30).floor()} month${(difference.inDays / 30).floor() > 1 ? 's' : ''} ago';
+      } else if (difference.inDays > 0) {
+        return '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+      } else if (difference.inHours > 0) {
+        return '${difference.inHours} hour${difference.inHours > 1 ? 's' : ''} ago';
+      } else if (difference.inMinutes > 0) {
+        return '${difference.inMinutes} minute${difference.inMinutes > 1 ? 's' : ''} ago';
+      } else {
+        return 'Just now';
+      }
+    } catch (e) {
+      return 'Recently';
+    }
+  }
+
+  Future<void> _deletePost(BuildContext context) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || currentUser.uid != userId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You can only delete your own posts')),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Post'),
+        content: const Text('Are you sure you want to delete this post?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('communityPosts')
+            .doc(postId)
+            .delete();
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Post deleted successfully')),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting post: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final isOwner = currentUser?.uid == userId;
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => PostDetailScreen(postId: postId),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: const Color(0xFF0D5EF9).withOpacity(0.1),
+                  child: const Icon(Icons.person, color: Color(0xFF0D5EF9)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        userName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        _getTimeAgo(createdAt),
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D5EF9).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_getCropEmoji(crop)} $crop',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0D5EF9),
+                    ),
+                  ),
+                ),
+                if (isOwner) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => _deletePost(context),
+                    tooltip: 'Delete post',
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            
+            // Title
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            
+            // Description
+            if (description.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                description,
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            
+            // Image thumbnail
+            if (imageData != null && imageData!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: 150,
+                    minHeight: 150,
+                  ),
+                  child: Image.memory(
+                    base64Decode(imageData!),
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 150,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+
+            // Actions
+            Row(
+              children: [
+                InkWell(
+                  onTap: () async {
+                    final user = FirebaseAuth.instance.currentUser;
+                    if (user != null) {
+                      final postRef = FirebaseFirestore.instance.collection('communityPosts').doc(postId);
+
+                      if (likedBy.contains(user.uid)) {
+                        // Unlike
+                        await postRef.update({
+                          'likes': FieldValue.increment(-1),
+                          'likedBy': FieldValue.arrayRemove([user.uid]),
+                        });
+                      } else {
+                        // Like
+                        await postRef.update({
+                          'likes': FieldValue.increment(1),
+                          'likedBy': FieldValue.arrayUnion([user.uid]),
+                        });
+                      }
+                    }
+                  },
+                  child: Row(
+                    children: [
+                      Icon(
+                        likedBy.contains(FirebaseAuth.instance.currentUser?.uid) 
+                          ? Icons.thumb_up 
+                          : Icons.thumb_up_outlined, 
+                        size: 18, 
+                        color: likedBy.contains(FirebaseAuth.instance.currentUser?.uid)
+                          ? Colors.blue
+                          : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$likes',
+                        style: TextStyle(
+                          color: likedBy.contains(FirebaseAuth.instance.currentUser?.uid)
+                            ? Colors.blue
+                            : Colors.grey.shade600, 
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Icon(Icons.comment_outlined, size: 18, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  '$comments',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+    );
+  }
+}
+
+// Post Detail Screen
+class PostDetailScreen extends StatefulWidget {
+  final String postId;
+
+  const PostDetailScreen({super.key, required this.postId});
+
+  @override
+  State<PostDetailScreen> createState() => _PostDetailScreenState();
+}
+
+class _PostDetailScreenState extends State<PostDetailScreen> {
+  final TextEditingController _commentController = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Post Details'),
+        backgroundColor: const Color(0xFF0D5EF9),
+        foregroundColor: Colors.white,
+      ),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('communityPosts')
+            .doc(widget.postId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text('Error: ${snapshot.error}'),
+                ],
+              ),
+            );
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.info_outline, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('Post not found', style: TextStyle(fontSize: 18)),
+                ],
+              ),
+            );
+          }
+
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final currentUser = FirebaseAuth.instance.currentUser;
+          final isOwner = currentUser?.uid == data['userId'];
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Card
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // User info
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: const Color(0xFF0D5EF9).withOpacity(0.1),
+                              child: const Icon(Icons.person, color: Color(0xFF0D5EF9), size: 28),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    data['userName'] ?? 'Anonymous',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatTimestamp(data['createdAt']),
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0D5EF9).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '${_getCropEmoji(data['crop'])} ${data['crop']}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF0D5EF9),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        const Divider(),
+                        const SizedBox(height: 16),
+                        
+                        // Title
+                        Text(
+                          data['title'] ?? 'Untitled',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        
+                        // Description
+                        if (data['description'] != null && data['description'].toString().isNotEmpty) ...[
+                          Text(
+                            data['description'],
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 16,
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        
+                        // Image if exists
+                        if (data['imageData'] != null && data['imageData'].toString().isNotEmpty) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.memory(
+                              base64Decode(data['imageData']),
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  height: 200,
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(Icons.broken_image, size: 64, color: Colors.grey),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        
+                        // Stats and Actions
+                        Row(
+                          children: [
+                            InkWell(
+                              onTap: () async {
+                                final user = FirebaseAuth.instance.currentUser;
+                                if (user != null) {
+                                  final postRef = FirebaseFirestore.instance.collection('communityPosts').doc(widget.postId);
+                                  final postDoc = await postRef.get();
+                                  final likedBy = List<String>.from(postDoc.data()?['likedBy'] ?? []);
+                                  
+                                  if (likedBy.contains(user.uid)) {
+                                    // Unlike
+                                    await postRef.update({
+                                      'likes': FieldValue.increment(-1),
+                                      'likedBy': FieldValue.arrayRemove([user.uid]),
+                                    });
+                                  } else {
+                                    // Like
+                                    await postRef.update({
+                                      'likes': FieldValue.increment(1),
+                                      'likedBy': FieldValue.arrayUnion([user.uid]),
+                                    });
+                                  }
+                                }
+                              },
+                              child: Row(
+                                children: [
+                                  Icon(Icons.thumb_up_outlined, size: 20, color: Colors.grey.shade600),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '${data['likes'] ?? 0}',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade700,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            Icon(Icons.comment_outlined, size: 20, color: Colors.grey.shade600),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${data['comments'] ?? 0}',
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 24),
+                        const Divider(),
+                        
+                        // Comments Section
+                        const Text(
+                          'Comments',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Comments List
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('communityPosts')
+                              .doc(widget.postId)
+                              .collection('comments')
+                              .orderBy('createdAt', descending: true)
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            
+                            final comments = snapshot.data!.docs;
+                            
+                            if (comments.isEmpty) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                child: Center(
+                                  child: Text(
+                                    'No comments yet. Be the first!',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                            
+                            return ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: comments.length,
+                              separatorBuilder: (context, index) => const Divider(height: 20),
+                              itemBuilder: (context, index) {
+                                final comment = comments[index].data() as Map<String, dynamic>;
+                                final commentId = comments[index].id;
+                                final isCommentOwner = comment['userId'] == FirebaseAuth.instance.currentUser?.uid;
+                                
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 16,
+                                            backgroundColor: Colors.blue.shade100,
+                                            child: Text(
+                                              (comment['userName'] ?? 'A')[0].toUpperCase(),
+                                              style: TextStyle(
+                                                color: Colors.blue.shade700,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  comment['userName'] ?? 'Anonymous',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  _formatTimestamp(comment['createdAt']),
+                                                  style: TextStyle(
+                                                    color: Colors.grey.shade600,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (isCommentOwner)
+                                            IconButton(
+                                              icon: const Icon(Icons.delete_outline, size: 20),
+                                              color: Colors.red,
+                                              onPressed: () async {
+                                                await FirebaseFirestore.instance
+                                                    .collection('communityPosts')
+                                                    .doc(widget.postId)
+                                                    .collection('comments')
+                                                    .doc(commentId)
+                                                    .delete();
+                                                    
+                                                await FirebaseFirestore.instance
+                                                    .collection('communityPosts')
+                                                    .doc(widget.postId)
+                                                    .update({'comments': FieldValue.increment(-1)});
+                                              },
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        comment['text'] ?? '',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Add Comment Input
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _commentController,
+                                  decoration: InputDecoration(
+                                    hintText: 'Add a comment...',
+                                    border: InputBorder.none,
+                                    hintStyle: TextStyle(color: Colors.grey.shade600),
+                                  ),
+                                  maxLines: null,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.send, color: Colors.blue),
+                                onPressed: () async {
+                                  final text = _commentController.text.trim();
+                                  if (text.isEmpty) return;
+                                  
+                                  final user = FirebaseAuth.instance.currentUser;
+                                  if (user == null) return;
+                                  
+                                  await FirebaseFirestore.instance
+                                      .collection('communityPosts')
+                                      .doc(widget.postId)
+                                      .collection('comments')
+                                      .add({
+                                    'text': text,
+                                    'userId': user.uid,
+                                    'userName': user.displayName ?? user.email?.split('@')[0] ?? 'Anonymous',
+                                    'createdAt': FieldValue.serverTimestamp(),
+                                  });
+                                  
+                                  await FirebaseFirestore.instance
+                                      .collection('communityPosts')
+                                      .doc(widget.postId)
+                                      .update({'comments': FieldValue.increment(1)});
+                                  
+                                  _commentController.clear();
+                                  FocusScope.of(context).unfocus();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Delete button for owner
+                        if (isOwner) ...[
+                          const SizedBox(height: 16),
+                          const Divider(),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _deletePost(context),
+                              icon: const Icon(Icons.delete_outline, color: Colors.red),
+                              label: const Text('Delete Post', style: TextStyle(color: Colors.red)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.red),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _getCropEmoji(String crop) {
+    switch (crop) {
+      case 'Grape': return '🍇';
+      case 'Wheat': return '🌾';
+      case 'Rice': return '🍚';
+      case 'Cotton': return '🧶';
+      case 'Sugarcane': return '🎋';
+      case 'Tomato': return '🍅';
+      case 'Onion': return '🧅';
+      case 'Brinjal': return '🍆';
+      case 'Cucumber': return '🥒';
+      default: return '🌱';
+    }
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return 'Just now';
+    
+    try {
+      final DateTime dateTime = (timestamp as Timestamp).toDate();
+      final difference = DateTime.now().difference(dateTime);
+      
+      if (difference.inDays > 365) {
+        return '${(difference.inDays / 365).floor()} year${(difference.inDays / 365).floor() > 1 ? 's' : ''} ago';
+      } else if (difference.inDays > 30) {
+        return '${(difference.inDays / 30).floor()} month${(difference.inDays / 30).floor() > 1 ? 's' : ''} ago';
+      } else if (difference.inDays > 0) {
+        return '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+      } else if (difference.inHours > 0) {
+        return '${difference.inHours} hour${difference.inHours > 1 ? 's' : ''} ago';
+      } else if (difference.inMinutes > 0) {
+        return '${difference.inMinutes} minute${difference.inMinutes > 1 ? 's' : ''} ago';
+      } else {
+        return 'Just now';
+      }
+    } catch (e) {
+      return 'Recently';
+    }
+  }
+
+  Future<void> _deletePost(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Post'),
+        content: const Text('Are you sure you want to delete this post? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('communityPosts')
+            .doc(widget.postId)
+            .delete();
+        
+        if (context.mounted) {
+          Navigator.pop(context); // Go back to community screen
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Post deleted successfully')),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting post: $e')),
+          );
+        }
+      }
+    }
   }
 }
 
@@ -1366,9 +2921,12 @@ class MarketScreen extends StatefulWidget {
   State<MarketScreen> createState() => _MarketScreenState();
 }
 
-class _MarketScreenState extends State<MarketScreen> with TickerProviderStateMixin {
-  // Tab count must match the number of tabs provided below (6 tabs).
-  late final TabController _tabController = TabController(length: 5, vsync: this);
+class _MarketScreenState extends State<MarketScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  // -1 means "All categories" (show everything). Tapping an already-selected
+  // icon will toggle back to -1.
+  int _selectedCategoryIndex = -1;
 
   @override
   Widget build(BuildContext context) {
@@ -1387,34 +2945,28 @@ class _MarketScreenState extends State<MarketScreen> with TickerProviderStateMix
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
                   child: TextField(
+                    controller: _searchController,
+                    onChanged: (v) => setState(() => _searchQuery = v.trim()),
                     decoration: InputDecoration(
                       hintText: s.t('search_market'),
                       prefixIcon: const Icon(Icons.search),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
                       isDense: true,
+                      suffixIcon: _searchQuery.isNotEmpty ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() { _searchController.clear(); _searchQuery = ''; }),
+                      ) : null,
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                _CategoriesRow(),
+                _CategoriesRow(selectedIndex: _selectedCategoryIndex, onSelected: (i) {
+                  setState(() => _selectedCategoryIndex = (_selectedCategoryIndex == i ? -1 : i));
+                }),
                 const SizedBox(height: 16),
-                TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  tabs: [
-                    Tab(text: s.t('Pesticides')),
-                    Tab(text: s.t('Fertilizers')),
-                    Tab(text: s.t('Seeds')),
-                    Tab(text: s.t('Organic Crop Nutrition')),
-                    Tab(text: s.t('Cattle Feed')),
-                    Tab(text: s.t('Tools and Machinery')),
-                  ],
-                ),
+                // Show products for the selected category (icons control selection)
                 Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: List.generate(6, (index) => _ProductsGrid()),
-                  ),
+                  child: _ProductsGrid(categoryIndex: _selectedCategoryIndex, searchQuery: _searchQuery),
                 ),
               ],
             ),
@@ -1459,34 +3011,29 @@ class _MarketScreenState extends State<MarketScreen> with TickerProviderStateMix
             0
           ),
           child: TextField(
+            controller: _searchController,
+            onChanged: (v) => setState(() => _searchQuery = v.trim()),
             decoration: InputDecoration(
               hintText: s.t('search_market'),
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
               isDense: true,
+              suffixIcon: _searchQuery.isNotEmpty ? IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () => setState(() { _searchController.clear(); _searchQuery = ''; }),
+              ) : null,
             ),
           ),
         ),
         SizedBox(height: isTablet ? 12 : 8),
-        _CategoriesRow(),
+  _CategoriesRow(selectedIndex: _selectedCategoryIndex, onSelected: (i) {
+    setState(() => _selectedCategoryIndex = (_selectedCategoryIndex == i ? -1 : i));
+  }),
         SizedBox(height: isTablet ? 12 : 8),
-        TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabs: [
-            Tab(text: s.t('Pesticides')),
-            Tab(text: s.t('Fertilizers')),
-            Tab(text: s.t('Seeds')),
-            Tab(text: s.t('Organic Crop Nutrition')),
-            Tab(text: s.t('Cattle Feed')),
-            Tab(text: s.t('Tools and Machinery')),
-          ],
-        ),
+        SizedBox(height: isTablet ? 12 : 8),
+        // Directly show products for selected category (mobile layout)
         Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: List.generate(10, (index) => _ProductsGrid()),
-          ),
+          child: _ProductsGrid(categoryIndex: _selectedCategoryIndex, searchQuery: _searchQuery),
         ),
       ],
     );
@@ -1545,35 +3092,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
           
           // Settings Options
           if (user != null) ...[
-            _buildMenuTile(context, Icons.person_outline, 'Profile Settings', () {
+            _buildMenuTile(context, Icons.person_outline, stringsOf(context).t('Profile Settings'), () {
               print('🔵 Profile Settings tapped!');
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const ProfileSettingsScreen()),
               );
             }, isTablet),
-            _buildMenuTile(context, Icons.notifications_outlined, 'Notifications', () {
+            _buildMenuTile(context, Icons.notifications_outlined, stringsOf(context).t('Notifications'), () {
               print('🔵 Notifications tapped!');
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const NotificationsScreen()),
               );
             }, isTablet),
-            _buildMenuTile(context, Icons.language, 'Language', () {
+            _buildMenuTile(context, Icons.language, stringsOf(context).t('Language'), () async {
               print('🔵 Language tapped!');
-              Navigator.push(
+              final selectedCode = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const LanguageScreen()),
               );
+              // If the language screen popped with a selected language code,
+              // apply it to the app's LocaleController and reload translations.
+              if (selectedCode is String && selectedCode.isNotEmpty) {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('selected_locale', selectedCode);
+                LocaleController.instance.setLocale(Locale(selectedCode));
+                await TranslationController.instance.ensureLoaded(selectedCode);
+                TranslationController.instance.notifyListeners();
+              }
             }, isTablet),
-            _buildMenuTile(context, Icons.help_outline, 'Help & Support', () {
+            _buildMenuTile(context, Icons.help_outline, stringsOf(context).t('Help & Support'), () {
               print('🔵 Help & Support tapped!');
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const HelpSupportScreen()),
               );
             }, isTablet),
-            _buildMenuTile(context, Icons.privacy_tip_outlined, 'Privacy Policy', () {
+            _buildMenuTile(context, Icons.privacy_tip_outlined, stringsOf(context).t('privacy policy'), () {
               print('🔵 Privacy Policy tapped!');
               Navigator.push(
                 context,
@@ -1864,19 +3420,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Grow smart together!',
+                  stringsOf(context).t('grow_smart_title'),
                   style: TextStyle(fontSize: isTablet ? 18 : 16, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: isTablet ? 6 : 4),
                 Text(
-                  'Share GrapeMaster and help farmers solve their grape problems.',
+                  stringsOf(context).t('grow_smart_desc'),
                   style: TextStyle(fontSize: isTablet ? 15 : 13, color: Colors.black54),
                 ),
                 SizedBox(height: isTablet ? 10 : 8),
                 TextButton(
                   onPressed: () {},
                   child: Text(
-                    'Share GrapeMaster',
+                    stringsOf(context).t('share_grapemaster'),
                     style: TextStyle(
                       color: const Color(0xFF0D5EF9),
                       fontSize: isTablet ? 16 : 14,
@@ -1915,19 +3471,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'How is your experience with GrapeMaster app?',
+                  stringsOf(context).t('feedback_title'),
                   style: TextStyle(fontSize: isTablet ? 18 : 16, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: isTablet ? 6 : 4),
                 Text(
-                  'We\'d love to hear your thoughts and suggestions.',
+                  stringsOf(context).t('feedback_desc'),
                   style: TextStyle(fontSize: isTablet ? 15 : 13, color: Colors.black54),
                 ),
                 SizedBox(height: isTablet ? 10 : 8),
                 TextButton(
                   onPressed: () {},
                   child: Text(
-                    'Give Feedback',
+                    stringsOf(context).t('give_feedback'),
                     style: TextStyle(
                       color: const Color(0xFF0D5EF9),
                       fontSize: isTablet ? 16 : 14,
@@ -2896,7 +4452,7 @@ class _CropChipsRowState extends State<_CropChipsRow> {
                             'plantingDate': plantingDateController.text.isEmpty 
                               ? DateTime.now().toString().split(' ')[0]
                               : plantingDateController.text,
-                            'color': 'green',
+                            'color': Colors.green.value, // Store as integer color value
                             'addedAt': FieldValue.serverTimestamp(),
                           });
                         
@@ -2957,47 +4513,225 @@ class _WeatherAndTaskCards extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _RoundedCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.wb_sunny, color: Colors.orange.shade600, size: 24),
-                          const SizedBox(width: 8),
-                          Text(s.todayLabel(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                        ],
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade50, Colors.blue.shade100],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.shade200.withOpacity(0.5),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
                       ),
-                      const SizedBox(height: 8),
-                                             Text('${s.t('clear')} • 32°C / 28°C', style: const TextStyle(fontSize: 16)),
-                       const SizedBox(height: 8),
-                       Text('Humidity: 75% • Wind: 8 km/h', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
-                       const SizedBox(height: 8),
-                       Text('UV Index: High • Air Quality: Good', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
-                      const SizedBox(height: 16),
-                      const _LocationAllowRow(),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: _RoundedCard(
+                  padding: const EdgeInsets.all(24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(Icons.schedule, color: Colors.blue.shade600, size: 24),
-                          const SizedBox(width: 8),
-                          Text('Today\'s Tasks', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.blue.shade300.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(Icons.wb_sunny, color: Colors.orange.shade600, size: 32),
+                              ),
+                              const SizedBox(width: 16),
+                              Text(
+                                s.todayLabel(), 
+                                style: TextStyle(
+                                  fontSize: 24, 
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade900,
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                                             _TaskItem(icon: Icons.water_drop, task: 'Water wheat field', time: '6:00 AM', completed: true),
-                       _TaskItem(icon: Icons.bug_report, task: 'Check for stem borer', time: '10:00 AM', completed: false),
-                       _TaskItem(icon: Icons.eco, task: 'Apply NPK fertilizer', time: '4:00 PM', completed: false),
-                       _TaskItem(icon: Icons.agriculture, task: 'Harvest ready crops', time: '7:00 AM', completed: false),
+                      const SizedBox(height: 20),
+                      // Real-time weather (fetched from OpenWeather)
+                      FutureBuilder<Map<String, dynamic>?>(
+                        future: WeatherService.fetchCurrentWeather(),
+                        builder: (context, snap) {
+                          if (snap.connectionState != ConnectionState.done) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: CircularProgressIndicator(color: Colors.blue.shade600),
+                              ),
+                            );
+                          }
+                          if (!snap.hasData || snap.data == null) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                '${s.t('clear')} • --°C / --°C', 
+                                style: TextStyle(fontSize: 18, color: Colors.blue.shade800),
+                              ),
+                            );
+                          }
+                          final w = snap.data!;
+                          final desc = (w['description'] ?? s.t('clear')).toString();
+                          final currentTemp = w['temp'] != null ? (w['temp'] as double).round().toString() : '--';
+                          final max = w['temp_max'] != null ? (w['temp_max'] as double).round().toString() : '--';
+                          final min = w['temp_min'] != null ? (w['temp_min'] as double).round().toString() : '--';
+                          final locationName = (w['raw'] != null && w['raw']['name'] != null && (w['raw']['name'] as String).isNotEmpty) 
+                              ? w['raw']['name'] as String 
+                              : '';
+                          
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Temperature and location
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Large temperature display
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            currentTemp,
+                                            style: TextStyle(
+                                              fontSize: 56,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.blue.shade900,
+                                              height: 1,
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 8),
+                                            child: Text(
+                                              '°C',
+                                              style: TextStyle(
+                                                fontSize: 28,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.blue.shade700,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      // Weather description
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.7),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          desc.toUpperCase(),
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.blue.shade800,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  // Location info
+                                  if (locationName.isNotEmpty)
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(Icons.location_on, color: Colors.blue.shade700, size: 20),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              locationName,
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.blue.shade900,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'H: ${max}° L: ${min}°',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            color: Colors.blue.shade700,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                              // Weather details
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    _WeatherDetailItem(
+                                      icon: Icons.water_drop,
+                                      label: 'Humidity',
+                                      value: '${w['humidity'] ?? '-'}%',
+                                      color: Colors.blue.shade700,
+                                    ),
+                                    Container(
+                                      width: 1,
+                                      height: 40,
+                                      color: Colors.blue.shade300,
+                                    ),
+                                    _WeatherDetailItem(
+                                      icon: Icons.air,
+                                      label: 'Wind',
+                                      value: '${w['wind_speed'] ?? '-'} m/s',
+                                      color: Colors.blue.shade700,
+                                    ),
+                                    Container(
+                                      width: 1,
+                                      height: 40,
+                                      color: Colors.blue.shade300,
+                                    ),
+                                    _WeatherDetailItem(
+                                      icon: Icons.wb_sunny_outlined,
+                                      label: 'UV Index',
+                                      value: 'High',
+                                      color: Colors.orange.shade600,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -3013,60 +4747,255 @@ class _WeatherAndTaskCards extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: _RoundedCard(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.blue.shade50, Colors.blue.shade100],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(isTablet ? 18 : 16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.shade200.withOpacity(0.4),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                padding: EdgeInsets.all(isTablet ? 20 : 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.wb_sunny, color: Colors.orange.shade600, size: isTablet ? 22 : 20),
-                        SizedBox(width: isTablet ? 8 : 6),
+                        Container(
+                          padding: EdgeInsets.all(isTablet ? 10 : 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.shade300.withOpacity(0.3),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(Icons.wb_sunny, color: Colors.orange.shade600, size: isTablet ? 26 : 22),
+                        ),
+                        SizedBox(width: isTablet ? 12 : 10),
                         Text(
                           s.todayLabel(), 
                           style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: isTablet ? 16 : 14,
-                          )
+                            fontWeight: FontWeight.bold,
+                            fontSize: isTablet ? 20 : 18,
+                            color: Colors.blue.shade900,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text('${s.t('clear')} • 24°C / 20°C', style: TextStyle(fontSize: isTablet ? 15 : 14)),
-                    const SizedBox(height: 8),
-                    Text('Humidity: 65% • Wind: 12 km/h', style: TextStyle(fontSize: isTablet ? 13 : 12, color: Colors.grey.shade600)),
-                    const SizedBox(height: 12),
-                    const _LocationAllowRow(),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(width: isTablet ? 16 : 12),
-            Expanded(
-              child: _RoundedCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.schedule, color: Colors.blue.shade600, size: isTablet ? 22 : 20),
-                        SizedBox(width: isTablet ? 8 : 6),
-                        Text(
-                          'Tasks', 
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: isTablet ? 16 : 14,
-                          )
-                        ),
-                      ],
+                    SizedBox(height: isTablet ? 16 : 12),
+                    // Real-time weather (mobile / small layout)
+                    FutureBuilder<Map<String, dynamic>?>(
+                      future: WeatherService.fetchCurrentWeather(),
+                      builder: (context, snap) {
+                        if (snap.connectionState != ConnectionState.done) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: CircularProgressIndicator(color: Colors.blue.shade600),
+                            ),
+                          );
+                        }
+                        if (!snap.hasData || snap.data == null) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              '${s.t('clear')} • --°C / --°C', 
+                              style: TextStyle(fontSize: isTablet ? 16 : 15, color: Colors.blue.shade800),
+                            ),
+                          );
+                        }
+                        final w = snap.data!;
+                        final desc = (w['description'] ?? s.t('clear')).toString();
+                        final currentTemp = w['temp'] != null ? (w['temp'] as double).round().toString() : '--';
+                        final max = w['temp_max'] != null ? (w['temp_max'] as double).round().toString() : '--';
+                        final min = w['temp_min'] != null ? (w['temp_min'] as double).round().toString() : '--';
+                        final locationName = (w['raw'] != null && w['raw']['name'] != null && (w['raw']['name'] as String).isNotEmpty) 
+                            ? w['raw']['name'] as String 
+                            : '';
+                        
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Temperature and location
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Large temperature
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      currentTemp,
+                                      style: TextStyle(
+                                        fontSize: isTablet ? 48 : 42,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue.shade900,
+                                        height: 1,
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        '°C',
+                                        style: TextStyle(
+                                          fontSize: isTablet ? 22 : 20,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue.shade700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                // Location and H/L
+                                if (locationName.isNotEmpty)
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.location_on, color: Colors.blue.shade700, size: isTablet ? 18 : 16),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            locationName.length > 12 ? '${locationName.substring(0, 12)}...' : locationName,
+                                            style: TextStyle(
+                                              fontSize: isTablet ? 14 : 13,
+                                              color: Colors.blue.shade900,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'H: ${max}° L: ${min}°',
+                                        style: TextStyle(
+                                          fontSize: isTablet ? 13 : 12,
+                                          color: Colors.blue.shade700,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                            SizedBox(height: isTablet ? 12 : 10),
+                            // Weather description
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: isTablet ? 12 : 10, vertical: isTablet ? 6 : 5),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                desc.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: isTablet ? 13 : 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.blue.shade800,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: isTablet ? 16 : 12),
+                            // Weather details
+                            Container(
+                              padding: EdgeInsets.all(isTablet ? 14 : 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _WeatherDetailItem(
+                                    icon: Icons.water_drop,
+                                    label: 'Humidity',
+                                    value: '${w['humidity'] ?? '-'}%',
+                                    color: Colors.blue.shade700,
+                                    isCompact: !isTablet,
+                                  ),
+                                  Container(
+                                    width: 1,
+                                    height: isTablet ? 36 : 32,
+                                    color: Colors.blue.shade300,
+                                  ),
+                                  _WeatherDetailItem(
+                                    icon: Icons.air,
+                                    label: 'Wind',
+                                    value: '${w['wind_speed'] ?? '-'} m/s',
+                                    color: Colors.blue.shade700,
+                                    isCompact: !isTablet,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
-                    const SizedBox(height: 8),
-                    _TaskItem(icon: Icons.water_drop, task: 'Water tomatoes', time: '9:00 AM', completed: true),
-                    _TaskItem(icon: Icons.bug_report, task: 'Check for pests', time: '2:00 PM', completed: false),
                   ],
                 ),
               ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+// Helper widget for weather detail items
+class _WeatherDetailItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final bool isCompact;
+
+  const _WeatherDetailItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    this.isCompact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: isCompact ? 22 : 26),
+        SizedBox(height: isCompact ? 4 : 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: isCompact ? 11 : 12,
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: isCompact ? 2 : 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isCompact ? 13 : 15,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
         ),
       ],
     );
@@ -3114,53 +5043,6 @@ class _TaskItem extends StatelessWidget {
               fontSize: 12,
               color: Colors.grey.shade600,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LocationAllowRow extends StatelessWidget {
-  const _LocationAllowRow();
-
-  @override
-  Widget build(BuildContext context) {
-    final s = stringsOf(context);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth > 600;
-    final isDesktop = screenWidth > 900;
-    
-    return Container(
-      padding: EdgeInsets.all(isTablet ? 16 : 12),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade100,
-        borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.location_on_outlined, 
-            size: isTablet ? 22 : 18,
-            color: Colors.amber.shade700,
-          ),
-          SizedBox(width: isTablet ? 12 : 8),
-          Expanded(
-            child: Text(
-              s.t('location_perm'),
-              style: TextStyle(
-                fontSize: isTablet ? 15 : 14,
-                color: Colors.amber.shade800,
-              ),
-            )
-          ),
-          Text(
-            s.t('allow'), 
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: isTablet ? 15 : 14,
-              color: Colors.amber.shade800,
-            )
           ),
         ],
       ),
@@ -3303,7 +5185,15 @@ class _Step extends StatelessWidget {
 class _FilterChip extends StatelessWidget {
   final String label;
   final String emoji;
-  const _FilterChip({required this.label, required this.emoji});
+  final bool isSelected;
+  final VoidCallback onTap;
+  
+  const _FilterChip({
+    required this.label,
+    required this.emoji,
+    required this.isSelected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3311,22 +5201,33 @@ class _FilterChip extends StatelessWidget {
     final isTablet = screenWidth > 600;
     final isDesktop = screenWidth > 900;
     
-    return Chip(
-      avatar: Text(
-        emoji,
-        style: TextStyle(fontSize: isTablet ? 18 : 16),
-      ),
-      label: Text(
-        label,
-        style: TextStyle(fontSize: isTablet ? 14 : 12),
-      ),
-      side: BorderSide(color: Colors.grey.shade300),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(isDesktop ? 24 : 20)
-      ),
-      padding: EdgeInsets.symmetric(
-        horizontal: isTablet ? 12 : 8,
-        vertical: isTablet ? 8 : 4,
+    return GestureDetector(
+      onTap: onTap,
+      child: Chip(
+        avatar: Text(
+          emoji,
+          style: TextStyle(fontSize: isTablet ? 18 : 16),
+        ),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: isTablet ? 14 : 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? Colors.white : Colors.black87,
+          ),
+        ),
+        backgroundColor: isSelected ? const Color(0xFF0D5EF9) : Colors.white,
+        side: BorderSide(
+          color: isSelected ? const Color(0xFF0D5EF9) : Colors.grey.shade300,
+          width: isSelected ? 2 : 1,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(isDesktop ? 24 : 20)
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: isTablet ? 12 : 8,
+          vertical: isTablet ? 8 : 4,
+        ),
       ),
     );
   }
@@ -3438,6 +5339,10 @@ class _PostCard extends StatelessWidget {
 }
 
 class _CategoriesRow extends StatelessWidget {
+  final void Function(int)? onSelected;
+  final int? selectedIndex;
+  const _CategoriesRow({this.onSelected, this.selectedIndex});
+
   @override
   Widget build(BuildContext context) {
     final categories = [
@@ -3455,11 +5360,16 @@ class _CategoriesRow extends StatelessWidget {
     final isDesktop = screenWidth > 900;
     
     return SizedBox(
-      height: isDesktop ? 120 : (isTablet ? 112 : 104), // extra room for longer Hindi/Marathi labels
+      height: isDesktop ? 120 : (isTablet ? 112 : 104), // space for labels under icons
       child: ListView.separated(
         padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 16),
         scrollDirection: Axis.horizontal,
-        itemBuilder: (context, i) => _CategoryTile(cat: categories[i]),
+        itemBuilder: (context, i) => _CategoryTile(
+          cat: categories[i],
+          index: i,
+          onSelected: onSelected,
+          selectedIndex: selectedIndex,
+        ),
         separatorBuilder: (_, __) => SizedBox(width: isTablet ? 16 : 12),
         itemCount: categories.length,
       ),
@@ -3475,41 +5385,56 @@ class _Category {
 
 class _CategoryTile extends StatelessWidget {
   final _Category cat;
-  const _CategoryTile({required this.cat});
+  final int index;
+  final void Function(int)? onSelected;
+  final int? selectedIndex;
+  const _CategoryTile({required this.cat, required this.index, this.onSelected, this.selectedIndex});
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
     final isDesktop = screenWidth > 900;
-    
+
+    final selected = selectedIndex == index;
+    final bgColor = selected ? const Color(0xFF0D5EF9) : Colors.indigo.shade50;
+    final iconColor = selected ? Colors.white : const Color(0xFF0D5EF9);
+    final textColor = selected ? const Color(0xFF0D5EF9) : Colors.black87;
+
     return Column(
       children: [
-        Container(
-          width: isDesktop ? 64 : (isTablet ? 60 : 56),
-          height: isDesktop ? 64 : (isTablet ? 60 : 56),
-          decoration: BoxDecoration(
-            color: Colors.indigo.shade50,
-            borderRadius: BorderRadius.circular(isDesktop ? 20 : 16),
-          ),
-          child: Icon(
-            cat.icon, 
-            color: const Color(0xFF0D5EF9),
-            size: isDesktop ? 28 : (isTablet ? 26 : 24),
+        GestureDetector(
+          onTap: () {
+            if (onSelected != null) onSelected!(index);
+          },
+          child: Container(
+            width: isDesktop ? 64 : (isTablet ? 60 : 56),
+            height: isDesktop ? 64 : (isTablet ? 60 : 56),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(isDesktop ? 20 : 16),
+              border: Border.all(color: selected ? const Color(0xFF0D5EF9) : Colors.transparent, width: 1.5),
+            ),
+            child: Icon(
+              cat.icon,
+              color: iconColor,
+              size: isDesktop ? 28 : (isTablet ? 26 : 24),
+            ),
           ),
         ),
         SizedBox(height: isDesktop ? 12 : 8),
         SizedBox(
-          width: isDesktop ? 100 : (isTablet ? 92 : 84),
+          width: isDesktop ? 90 : (isTablet ? 80 : 72),
           child: Text(
             cat.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: isDesktop ? 13 : (isTablet ? 12.5 : 12), 
-              height: 1.2
+              fontSize: isTablet ? 13 : 12,
+              color: textColor,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -3517,27 +5442,125 @@ class _CategoryTile extends StatelessWidget {
   }
 }
 
+// Service that fetches market products from Firestore with a local fallback.
+class MarketService {
+  // categoryKey should match how documents are stored in Firestore.
+  // Example keys: 'Pesticide', 'Fertilizer', 'Seeds', 'Organic', 'Cattle Feed', 'Tools'
+  // If categoryKey is null or empty, return all products (Firestone + fallback)
+  static Future<List<Map<String, dynamic>>> fetchProducts(String? categoryKey) async {
+    try {
+      Query query = FirebaseFirestore.instance.collection('marketProducts');
+      if (categoryKey != null && categoryKey.isNotEmpty) {
+        query = query.where('category', isEqualTo: categoryKey);
+      }
+
+      final snap = await query.get();
+      if (snap.docs.isNotEmpty) {
+        return snap.docs.map((d) {
+          final data = (d.data() as Map<String, dynamic>?) ?? <String, dynamic>{};
+          return {
+            'name': data['name'] ?? data['title'] ?? 'Unknown',
+            'brand': data['brand'] ?? data['vendor'] ?? '',
+            'price': data['price'] != null ? data['price'].toString() : (data['display_price'] ?? '--').toString(),
+            'size': data['size'] ?? data['pack'] ?? '',
+            'type': data['type'] ?? (categoryKey ?? ''),
+            'image': (data['image'] ?? data['imageUrl'] ?? '').toString(),
+          };
+        }).toList();
+      }
+    } catch (e) {
+      if (kDebugMode) print('MarketService fetch error: $e');
+    }
+
+    // Fallback static products (filtered by categoryKey)
+    final fallback = [
+      {'name': 'Urea', 'brand': 'IFFCO', 'price': '₹300', 'size': '50 kg', 'type': 'Fertilizer'},
+      {'name': 'DAP', 'brand': 'IFFCO', 'price': '₹1400', 'size': '50 kg', 'type': 'Fertilizer'},
+      {'name': 'NPK', 'brand': 'IFFCO', 'price': '₹1200', 'size': '50 kg', 'type': 'Fertilizer'},
+      {'name': 'Monocrotophos', 'brand': 'UPL', 'price': '₹450', 'size': '1 L', 'type': 'Pesticide'},
+      {'name': 'Chlorpyrifos', 'brand': 'UPL', 'price': '₹380', 'size': '1 L', 'type': 'Pesticide'},
+      {'name': 'Imidacloprid', 'brand': 'Bayer', 'price': '₹520', 'size': '1 L', 'type': 'Pesticide'},
+      {'name': 'Wheat Seeds', 'brand': 'Nirmal Seeds', 'price': '₹2800', 'size': '25 kg', 'type': 'Seeds'},
+      {'name': 'Rice Seeds', 'brand': 'Nirmal Seeds', 'price': '₹3200', 'size': '25 kg', 'type': 'Seeds'},
+      {'name': 'Organic Manure', 'brand': 'Organic India', 'price': '₹150', 'size': '25 kg', 'type': 'Organic'},
+    ];
+
+    // Return items matching the categoryKey (naive match)
+    // If no category requested, return the full fallback list
+    if (categoryKey == null || categoryKey.isEmpty) return fallback;
+
+    return fallback.where((p) {
+      final t = (p['type'] ?? '').toString().toLowerCase();
+      return t.contains(categoryKey.toLowerCase().split(' ').first);
+    }).toList();
+  }
+}
+
 class _ProductsGrid extends StatelessWidget {
+  final int categoryIndex;
+  final String searchQuery;
+  const _ProductsGrid({required this.categoryIndex, this.searchQuery = ''});
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
     final isDesktop = screenWidth > 900;
-    
+
     int crossAxisCount = 2;
     if (isDesktop) crossAxisCount = 4;
     else if (isTablet) crossAxisCount = 3;
-    
-    return GridView.builder(
-      padding: EdgeInsets.all(isTablet ? 20 : 16),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        mainAxisSpacing: isTablet ? 16 : 12,
-        crossAxisSpacing: isTablet ? 16 : 12,
-        childAspectRatio: isDesktop ? 0.8 : 0.72,
-      ),
-      itemCount: 8,
-      itemBuilder: (_, i) => _ProductCard(index: i),
+
+    // Map tab index to a category key used in Firestore
+    // Keys that correspond to Firestore `category` values. Keep order in sync
+    // with the icons shown above in `_CategoriesRow`.
+    final categoryKeys = [
+      'Pesticide',
+      'Fertilizer',
+      'Seeds',
+      'OrganicProtection', // Organic Crop Protection
+      'OrganicNutrition', // Organic Crop Nutrition
+      'Cattle Feed',
+      'Tools',
+    ];
+    // If categoryIndex is -1, we want all products → pass null to the service
+    final categoryKey = (categoryIndex < 0 || categoryIndex >= categoryKeys.length)
+      ? null
+      : categoryKeys[categoryIndex % categoryKeys.length];
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+  future: MarketService.fetchProducts(categoryKey),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return Center(child: CircularProgressIndicator());
+        }
+        final products = snap.data ?? [];
+        // Apply search filtering (by name or brand) if query provided
+        final query = searchQuery.trim().toLowerCase();
+        final filtered = query.isEmpty
+            ? products
+            : products.where((p) {
+                final name = (p['name'] ?? '').toString().toLowerCase();
+                final brand = (p['brand'] ?? '').toString().toLowerCase();
+                return name.contains(query) || brand.contains(query);
+              }).toList();
+
+        if (filtered.isEmpty) {
+          return Center(child: Text('No products found'));
+        }
+
+        return GridView.builder(
+          padding: EdgeInsets.all(isTablet ? 20 : 16),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: isTablet ? 16 : 12,
+            crossAxisSpacing: isTablet ? 16 : 12,
+            childAspectRatio: isDesktop ? 0.8 : 0.72,
+          ),
+          itemCount: filtered.length,
+          itemBuilder: (_, i) => _ProductCard(product: filtered[i]),
+        );
+      },
     );
   }
 }
@@ -3607,79 +5630,81 @@ class _TrendingTopics extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  final int index;
-  const _ProductCard({required this.index});
+  final Map<String, dynamic> product;
+  const _ProductCard({required this.product});
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
     final isDesktop = screenWidth > 900;
-    
-    final products = [
-      {'name': 'Urea', 'brand': 'IFFCO', 'price': '₹300', 'size': '50 kg', 'type': 'Fertilizer'},
-      {'name': 'DAP', 'brand': 'IFFCO', 'price': '₹1400', 'size': '50 kg', 'type': 'Fertilizer'},
-      {'name': 'NPK', 'brand': 'IFFCO', 'price': '₹1200', 'size': '50 kg', 'type': 'Fertilizer'},
-      {'name': 'Monocrotophos', 'brand': 'UPL', 'price': '₹450', 'size': '1 L', 'type': 'Pesticide'},
-      {'name': 'Chlorpyrifos', 'brand': 'UPL', 'price': '₹380', 'size': '1 L', 'type': 'Pesticide'},
-      {'name': 'Imidacloprid', 'brand': 'Bayer', 'price': '₹520', 'size': '1 L', 'type': 'Pesticide'},
-      {'name': 'Wheat Seeds', 'brand': 'Nirmal Seeds', 'price': '₹2800', 'size': '25 kg', 'type': 'Seeds'},
-      {'name': 'Rice Seeds', 'brand': 'Nirmal Seeds', 'price': '₹3200', 'size': '25 kg', 'type': 'Seeds'},
-      {'name': 'Cotton Seeds', 'brand': 'Nirmal Seeds', 'price': '₹1800', 'size': '1 kg', 'type': 'Seeds'},
-      {'name': 'Organic Manure', 'brand': 'Organic India', 'price': '₹150', 'size': '25 kg', 'type': 'Organic'},
-    ];
-    
-    final product = products[index % products.length];
-    
+
+    final name = product['name']?.toString() ?? 'Unknown';
+    final brand = product['brand']?.toString() ?? '';
+    final price = product['price']?.toString() ?? '--';
+    final size = product['size']?.toString() ?? '';
+    final type = product['type']?.toString() ?? '';
+
     return _RoundedCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: _getProductColor(product['type']!),
-                borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-              ),
-              child: Center(
-                child: Icon(
-                  _getProductIcon(product['type']!),
-                  size: isDesktop ? 48 : 40,
-                  color: Colors.white,
-                ),
-              ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+              child: (product['image'] != null && (product['image'] as String).isNotEmpty)
+                  ? Image.network(
+                      product['image'],
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (ctx, err, st) => Container(
+                        color: _getProductColor(type),
+                        child: Center(
+                          child: Icon(_getProductIcon(type), size: isDesktop ? 48 : 40, color: Colors.white),
+                        ),
+                      ),
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        color: _getProductColor(type),
+                      ),
+                      child: Center(
+                        child: Icon(_getProductIcon(type), size: isDesktop ? 48 : 40, color: Colors.white),
+                      ),
+                    ),
             ),
           ),
           SizedBox(height: isTablet ? 12 : 8),
           Text(
-            product['name']!, 
+            name,
             style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: isTablet ? 15 : 14,
-            )
+            ),
           ),
           Text(
-            'by ${product['brand']!}', 
+            brand.isNotEmpty ? 'by $brand' : '',
             style: TextStyle(
               color: Colors.black54,
               fontSize: isTablet ? 13 : 12,
-            )
+            ),
           ),
           SizedBox(height: isTablet ? 8 : 6),
           Text(
-            product['price']!, 
+            price,
             style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: isTablet ? 16 : 14,
               color: const Color(0xFF0D5EF9),
-            )
+            ),
           ),
           Text(
-            product['size']!, 
+            size,
             style: TextStyle(
               color: Colors.black54,
               fontSize: isTablet ? 13 : 12,
-            )
+            ),
           ),
         ],
       ),
